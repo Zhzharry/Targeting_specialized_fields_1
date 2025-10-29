@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hadoop WordCount 服务</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .response {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.configured {
+            background-color: #28a745;
+            color: white;
+        }
+        .status.not_configured {
+            background-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Hadoop WordCount 服务</h1>
+        
+        <!-- 状态显示 -->
+        <div class="section">
+            <h3>📊 当前状态</h3>
+            <div id="statusInfo">
+                <p>状态: <span id="status" class="status not_configured">未配置</span></p>
+                <p>输入路径: <span id="inputPath">未设置</span></p>
+                <p>输出路径: <span id="outputPath">/output</span></p>
+            </div>
+            <button onclick="getStatus()">🔄 刷新状态</button>
+        </div>
+
+        <!-- 设置输入路径 -->
+        <div class="section">
+            <h3>📁 设置输入路径</h3>
+            <p>请选择要处理的文件或目录路径：</p>
+            <input type="text" id="inputPathInput" placeholder="例如: /path/to/your/files 或 /path/to/single/file.txt">
+            <button onclick="setInputPath()">✅ 设置输入路径</button>
+            <div id="inputResponse" class="response" style="display: none;"></div>
+        </div>
+
+        <!-- 启动WordCount作业 -->
+        <div class="section">
+            <h3>🚀 启动WordCount作业</h3>
+            <p>自定义输出路径（可选）：</p>
+            <input type="text" id="outputPathInput" placeholder="例如: /custom/output/path">
+            <br><br>
+            <button onclick="startWordCount()" id="startBtn" disabled>▶️ 开始分析</button>
+            <button onclick="startWordCountWithCustomOutput()" id="startCustomBtn" disabled>▶️ 使用自定义输出路径</button>
+            <div id="startResponse" class="response" style="display: none;"></div>
+        </div>
+
+        <!-- 管理功能 -->
+        <div class="section">
+            <h3>⚙️ 管理功能</h3>
+            <button onclick="getConfig()">📋 查看配置</button>
+            <button onclick="resetConfig()">🔄 重置配置</button>
+            <div id="configResponse" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载时获取状态
+        window.onload = function() {
+            getStatus();
+        };
+
+        // 获取状态
+        async function getStatus() {
+            try {
+                const response = await fetch('/api/hadoop/status');
+                const data = await response.json();
+                
+                document.getElementById('status').textContent = data.selectedInputPath ? '已配置' : '未配置';
+                document.getElementById('status').className = 'status ' + (data.selectedInputPath ? 'configured' : 'not_configured');
+                document.getElementById('inputPath').textContent = data.selectedInputPath || '未设置';
+                document.getElementById('outputPath').textContent = data.outputPath || '/output';
+                
+                // 启用/禁用按钮
+                const hasInput = data.selectedInputPath && data.selectedInputPath.trim() !== '';
+                document.getElementById('startBtn').disabled = !hasInput;
+                document.getElementById('startCustomBtn').disabled = !hasInput;
+                
+            } catch (error) {
+                console.error('获取状态失败:', error);
+            }
+        }
+
+        // 设置输入路径
+        async function setInputPath() {
+            const inputPath = document.getElementById('inputPathInput').value.trim();
+            if (!inputPath) {
+                showResponse('inputResponse', '请输入文件路径', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/hadoop/input', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ inputPath: inputPath })
+                });
+                
+                const data = await response.json();
+                showResponse('inputResponse', JSON.stringify(data, null, 2), 
+                    data.status === 'success' ? 'success' : 'error');
+                
+                if (data.status === 'success') {
+                    getStatus(); // 刷新状态
+                }
+            } catch (error) {
+                showResponse('inputResponse', '请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 启动WordCount作业（使用默认输出路径）
+        async function startWordCount() {
+            try {
+                const response = await fetch('/api/hadoop/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                showResponse('startResponse', JSON.stringify(data, null, 2), 
+                    data.status === 'success' ? 'success' : 'error');
+            } catch (error) {
+                showResponse('startResponse', '请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 启动WordCount作业（使用自定义输出路径）
+        async function startWordCountWithCustomOutput() {
+            const outputPath = document.getElementById('outputPathInput').value.trim();
+            if (!outputPath) {
+                showResponse('startResponse', '请输入自定义输出路径', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/hadoop/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ outputPath: outputPath })
+                });
+                
+                const data = await response.json();
+                showResponse('startResponse', JSON.stringify(data, null, 2), 
+                    data.status === 'success' ? 'success' : 'error');
+            } catch (error) {
+                showResponse('startResponse', '请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 获取配置
+        async function getConfig() {
+            try {
+                const response = await fetch('/api/hadoop/config');
+                const data = await response.json();
+                showResponse('configResponse', JSON.stringify(data, null, 2), 'info');
+            } catch (error) {
+                showResponse('configResponse', '请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 重置配置
+        async function resetConfig() {
+            try {
+                const response = await fetch('/api/hadoop/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                showResponse('configResponse', JSON.stringify(data, null, 2), 
+                    data.status === 'success' ? 'success' : 'error');
+                
+                if (data.status === 'success') {
+                    getStatus(); // 刷新状态
+                }
+            } catch (error) {
+                showResponse('configResponse', '请求失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示响应
+        function showResponse(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = 'response ' + type;
+            element.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
