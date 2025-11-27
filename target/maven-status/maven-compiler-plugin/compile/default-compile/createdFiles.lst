@@ -1,0 +1,5 @@
+com\example\mapreduce\WordCountReducer.class
+com\example\mapreduce\WordCount.class
+com\example\controller\HadoopController.class
+com\example\WordCountApplication.class
+com\example\mapreduce\WordCountMapper.class
