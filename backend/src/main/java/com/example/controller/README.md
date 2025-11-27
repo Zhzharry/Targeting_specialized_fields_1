@@ -25,7 +25,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
-@CrossOrigin(origins = "http://localhost:5173")  // 允许前端Vue应用（5137端口）访问
+@CrossOrigin(origins = "http://localhost:5137")  // 允许前端Vue应用（5137端口）访问
 public class UserController {
     
     @Autowired

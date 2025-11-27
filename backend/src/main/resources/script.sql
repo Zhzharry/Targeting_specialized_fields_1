@@ -18,7 +18,6 @@ CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY COMMENT '用户ID',
     username VARCHAR(50) UNIQUE NOT NULL COMMENT '用户名',
     password VARCHAR(255) NOT NULL COMMENT '密码（明文存储）',
-    phone_number VARCHAR(20) UNIQUE NOT NULL COMMENT '手机号',
     user_profile JSON COMMENT '用户扩展信息（预算、家庭结构等）',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     INDEX idx_username (username),
@@ -206,61 +205,61 @@ CREATE TABLE property_features (
 -- 插入测试数据
 -- ====================================
 
--- 插入测试用户
-INSERT INTO users (username, password, phone_number, user_profile) VALUES
-('张三', 'password123', '13800138000', '{"budget": {"min": 300, "max": 500}, "preferred_locations": ["南山区", "福田区"], "family_structure": "couple"}'),
-('李四', 'password456', '13900139000', '{"budget": {"min": 400, "max": 700}, "preferred_locations": ["宝安区"], "family_structure": "family"}'),
-('王五', 'password789', '13700137000', '{"budget": {"min": 200, "max": 400}, "preferred_locations": ["龙岗区"], "family_structure": "single"}');
+-- -- 插入测试用户
+-- INSERT INTO users (username, password, phone_number, user_profile) VALUES
+-- ('张三', 'password123', '13800138000', '{"budget": {"min": 300, "max": 500}, "preferred_locations": ["南山区", "福田区"], "family_structure": "couple"}'),
+-- ('李四', 'password456', '13900139000', '{"budget": {"min": 400, "max": 700}, "preferred_locations": ["宝安区"], "family_structure": "family"}'),
+-- ('王五', 'password789', '13700137000', '{"budget": {"min": 200, "max": 400}, "preferred_locations": ["龙岗区"], "family_structure": "single"}');
 
--- 插入测试小区
-INSERT INTO communities (name, basic_info, location_info, facility_info) VALUES
-('万科城市花园', 
- '{"build_year": 2015, "total_size": 50000, "total_households": 800, "developer": "万科", "management_company": "万科物业"}',
- '{"province": "广东省", "city": "深圳市", "district": "南山区", "address": "科技园路123号", "longitude": 114.123456, "latitude": 22.543210}',
- '{"management_fee": 3.5, "parking_spaces": 1000, "plot_ratio": 2.5, "green_ratio": 0.35, "schools": ["深圳小学", "实验中学"]}'),
-('华润城', 
- '{"build_year": 2018, "total_size": 80000, "total_households": 1200, "developer": "华润", "management_company": "华润物业"}',
- '{"province": "广东省", "city": "深圳市", "district": "福田区", "address": "深南大道456号", "longitude": 114.056789, "latitude": 22.543000}',
- '{"management_fee": 4.0, "parking_spaces": 1500, "plot_ratio": 3.0, "green_ratio": 0.40, "schools": ["福田小学", "红岭中学"]}');
+-- -- 插入测试小区
+-- INSERT INTO communities (name, basic_info, location_info, facility_info) VALUES
+-- ('万科城市花园', 
+--  '{"build_year": 2015, "total_size": 50000, "total_households": 800, "developer": "万科", "management_company": "万科物业"}',
+--  '{"province": "广东省", "city": "深圳市", "district": "南山区", "address": "科技园路123号", "longitude": 114.123456, "latitude": 22.543210}',
+--  '{"management_fee": 3.5, "parking_spaces": 1000, "plot_ratio": 2.5, "green_ratio": 0.35, "schools": ["深圳小学", "实验中学"]}'),
+-- ('华润城', 
+--  '{"build_year": 2018, "total_size": 80000, "total_households": 1200, "developer": "华润", "management_company": "华润物业"}',
+--  '{"province": "广东省", "city": "深圳市", "district": "福田区", "address": "深南大道456号", "longitude": 114.056789, "latitude": 22.543000}',
+--  '{"management_fee": 4.0, "parking_spaces": 1500, "plot_ratio": 3.0, "green_ratio": 0.40, "schools": ["福田小学", "红岭中学"]}');
 
--- 插入测试房源
-INSERT INTO properties (community_id, title, basic_info, price_info, layout_info, status) VALUES
-(1, '万科城市花园 精装三房 南向采光好', 
- '{"property_type": "apartment", "build_year": 2018, "decoration": "hard"}',
- '{"total_price": 650.5, "unit_price": 85000, "price_history": [{"date": "2024-01-01", "price": 680}]}',
- '{"bedroom_count": 3, "living_room_count": 2, "bathroom_count": 2, "area": 89.5, "floor": 15, "total_floors": 28, "orientation": "south"}',
- 'for_sale'),
-(1, '万科城市花园 豪华两房 地铁口', 
- '{"property_type": "apartment", "build_year": 2018, "decoration": "luxury"}',
- '{"total_price": 480.0, "unit_price": 82000, "price_history": [{"date": "2024-02-01", "price": 490}]}',
- '{"bedroom_count": 2, "living_room_count": 1, "bathroom_count": 1, "area": 68.0, "floor": 10, "total_floors": 28, "orientation": "southeast"}',
- 'for_sale'),
-(2, '华润城 四房大户型 学区房', 
- '{"property_type": "apartment", "build_year": 2019, "decoration": "hard"}',
- '{"total_price": 980.0, "unit_price": 90000, "price_history": [{"date": "2024-03-01", "price": 1000}]}',
- '{"bedroom_count": 4, "living_room_count": 2, "bathroom_count": 3, "area": 128.0, "floor": 20, "total_floors": 35, "orientation": "south"}',
- 'for_sale');
+-- -- 插入测试房源
+-- INSERT INTO properties (community_id, title, basic_info, price_info, layout_info, status) VALUES
+-- (1, '万科城市花园 精装三房 南向采光好', 
+--  '{"property_type": "apartment", "build_year": 2018, "decoration": "hard"}',
+--  '{"total_price": 650.5, "unit_price": 85000, "price_history": [{"date": "2024-01-01", "price": 680}]}',
+--  '{"bedroom_count": 3, "living_room_count": 2, "bathroom_count": 2, "area": 89.5, "floor": 15, "total_floors": 28, "orientation": "south"}',
+--  'for_sale'),
+-- (1, '万科城市花园 豪华两房 地铁口', 
+--  '{"property_type": "apartment", "build_year": 2018, "decoration": "luxury"}',
+--  '{"total_price": 480.0, "unit_price": 82000, "price_history": [{"date": "2024-02-01", "price": 490}]}',
+--  '{"bedroom_count": 2, "living_room_count": 1, "bathroom_count": 1, "area": 68.0, "floor": 10, "total_floors": 28, "orientation": "southeast"}',
+--  'for_sale'),
+-- (2, '华润城 四房大户型 学区房', 
+--  '{"property_type": "apartment", "build_year": 2019, "decoration": "hard"}',
+--  '{"total_price": 980.0, "unit_price": 90000, "price_history": [{"date": "2024-03-01", "price": 1000}]}',
+--  '{"bedroom_count": 4, "living_room_count": 2, "bathroom_count": 3, "area": 128.0, "floor": 20, "total_floors": 35, "orientation": "south"}',
+--  'for_sale');
 
--- 插入用户偏好
-INSERT INTO user_preferences (user_id, preference_data) VALUES
-(1, '{"price_range": {"min": 300, "max": 600}, "area_range": {"min": 80, "max": 120}, "locations": ["南山区", "福田区"], "house_types": ["apartment"], "bedroom_range": {"min": 2, "max": 4}, "orientations": ["south", "southeast"], "decorations": ["hard", "luxury"], "keywords": ["学区", "地铁", "新房"]}'),
-(2, '{"price_range": {"min": 400, "max": 800}, "area_range": {"min": 100, "max": 150}, "locations": ["宝安区", "福田区"], "house_types": ["apartment"], "bedroom_range": {"min": 3, "max": 4}, "orientations": ["south"], "decorations": ["luxury"], "keywords": ["学区", "公园"]}');
+-- -- 插入用户偏好
+-- INSERT INTO user_preferences (user_id, preference_data) VALUES
+-- (1, '{"price_range": {"min": 300, "max": 600}, "area_range": {"min": 80, "max": 120}, "locations": ["南山区", "福田区"], "house_types": ["apartment"], "bedroom_range": {"min": 2, "max": 4}, "orientations": ["south", "southeast"], "decorations": ["hard", "luxury"], "keywords": ["学区", "地铁", "新房"]}'),
+-- (2, '{"price_range": {"min": 400, "max": 800}, "area_range": {"min": 100, "max": 150}, "locations": ["宝安区", "福田区"], "house_types": ["apartment"], "bedroom_range": {"min": 3, "max": 4}, "orientations": ["south"], "decorations": ["luxury"], "keywords": ["学区", "公园"]}');
 
--- 插入成交记录
-INSERT INTO transaction_records (property_id, community_id, transaction_data) VALUES
-(1, 1, '{"transaction_date": "2024-01-20", "city": "深圳市", "district": "南山区", "community_name": "万科城市花园", "layout": "3室2厅2卫", "orientation": "南", "floor_info": "中层/共28层", "area": 89.5, "total_price": 620.5, "unit_price": 69300, "source_url": "https://example.com/property/123"}'),
-(2, 1, '{"transaction_date": "2024-02-15", "city": "深圳市", "district": "南山区", "community_name": "万科城市花园", "layout": "2室1厅1卫", "orientation": "东南", "floor_info": "中层/共28层", "area": 68.0, "total_price": 475.0, "unit_price": 69850, "source_url": "https://example.com/property/124"}');
+-- -- 插入成交记录
+-- INSERT INTO transaction_records (property_id, community_id, transaction_data) VALUES
+-- (1, 1, '{"transaction_date": "2024-01-20", "city": "深圳市", "district": "南山区", "community_name": "万科城市花园", "layout": "3室2厅2卫", "orientation": "南", "floor_info": "中层/共28层", "area": 89.5, "total_price": 620.5, "unit_price": 69300, "source_url": "https://example.com/property/123"}'),
+-- (2, 1, '{"transaction_date": "2024-02-15", "city": "深圳市", "district": "南山区", "community_name": "万科城市花园", "layout": "2室1厅1卫", "orientation": "东南", "floor_info": "中层/共28层", "area": 68.0, "total_price": 475.0, "unit_price": 69850, "source_url": "https://example.com/property/124"}');
 
--- 插入房源特征
-INSERT INTO property_features (property_id, feature_data) VALUES
-(1, '{"feature_type": "facility", "feature_name": "near_subway", "feature_value": true, "feature_weight": 0.8, "description": "靠近地铁站"}'),
-(1, '{"feature_type": "facility", "feature_name": "near_school", "feature_value": true, "feature_weight": 0.9, "description": "学区房"}'),
-(3, '{"feature_type": "facility", "feature_name": "near_school", "feature_value": true, "feature_weight": 0.9, "description": "重点学区房"}');
+-- -- 插入房源特征
+-- INSERT INTO property_features (property_id, feature_data) VALUES
+-- (1, '{"feature_type": "facility", "feature_name": "near_subway", "feature_value": true, "feature_weight": 0.8, "description": "靠近地铁站"}'),
+-- (1, '{"feature_type": "facility", "feature_name": "near_school", "feature_value": true, "feature_weight": 0.9, "description": "学区房"}'),
+-- (3, '{"feature_type": "facility", "feature_name": "near_school", "feature_value": true, "feature_weight": 0.9, "description": "重点学区房"}');
 
--- ====================================
--- 创建完成提示
--- ====================================
+-- -- ====================================
+-- -- 创建完成提示
+-- -- ====================================
 
-SELECT '数据库创建完成！' AS message;
-SELECT CONCAT('共创建 ', COUNT(*), ' 张表') AS summary FROM information_schema.tables WHERE table_schema = 'second_hand_housing';
-SELECT table_name AS '表名', table_comment AS '说明' FROM information_schema.tables WHERE table_schema = 'second_hand_housing' ORDER BY table_name;
+-- SELECT '数据库创建完成！' AS message;
+-- SELECT CONCAT('共创建 ', COUNT(*), ' 张表') AS summary FROM information_schema.tables WHERE table_schema = 'second_hand_housing';
+-- SELECT table_name AS '表名', table_comment AS '说明' FROM information_schema.tables WHERE table_schema = 'second_hand_housing' ORDER BY table_name;
