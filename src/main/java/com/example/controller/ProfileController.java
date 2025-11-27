@@ -2,6 +2,8 @@ package com.example.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.service.predict_zhz.HousePricePredictionService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.FileNotFoundException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -39,6 +42,7 @@ public class ProfileController {
     private final String jdbcUsername;
     private final String jdbcPassword;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final HousePricePredictionService predictionService;
 
     static {
         try {
@@ -48,12 +52,15 @@ public class ProfileController {
         }
     }
 
+    @Autowired
     public ProfileController(@Value("${spring.datasource.url}") String jdbcUrl,
                              @Value("${spring.datasource.username}") String jdbcUsername,
-                             @Value("${spring.datasource.password}") String jdbcPassword) {
+                             @Value("${spring.datasource.password}") String jdbcPassword,
+                             HousePricePredictionService predictionService) {
         this.jdbcUrl = jdbcUrl;
         this.jdbcUsername = jdbcUsername;
         this.jdbcPassword = jdbcPassword;
+        this.predictionService = predictionService;
     }
 
     /**
@@ -91,12 +98,29 @@ public class ProfileController {
      */
     @PostMapping("/price-predict")
     public ResponseEntity<Map<String, Object>> pricePredict(@RequestBody Map<String, Object> payload) {
-        Map<String, Object> result = new HashMap<String, Object>();
-        result.put("input", payload);
-        result.put("predictedPricePerSquareMeter", 1);
-        result.put("unit", "万元/㎡");
-        result.put("message", "预测成功（示例值，后续可替换为真实算法）");
-        return ResponseEntity.ok(result);
+        String city = asText(payload.get("city"));
+        if (city == null) {
+            return error(HttpStatus.BAD_REQUEST, "city 不能为空");
+        }
+
+        Map<String, Object> features = extractFeatures(payload);
+
+        try {
+            double predicted = predictionService.predictPricePerSquareMeter(city, features);
+            Map<String, Object> result = new HashMap<String, Object>();
+            result.put("city", city);
+            result.put("features", features);
+            result.put("predictedPricePerSquareMeter", predicted);
+            result.put("unit", "万元/㎡");
+            result.put("message", "预测成功");
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return error(HttpStatus.BAD_REQUEST, e.getMessage());
+        } catch (FileNotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (Exception e) {
+            return serverError("预测失败", e);
+        }
     }
 
     /**
@@ -169,6 +193,25 @@ public class ProfileController {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private String asText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractFeatures(Map<String, Object> payload) {
+        Object nested = payload.get("features");
+        if (nested instanceof Map) {
+            return new HashMap<String, Object>((Map<String, Object>) nested);
+        }
+        Map<String, Object> features = new HashMap<String, Object>(payload);
+        features.remove("city");
+        return features;
     }
 
     private Object parseJson(String json) {
