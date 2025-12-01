@@ -3,11 +3,14 @@ package com.example.controller;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.sql.Connection;
@@ -15,6 +18,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -44,6 +48,60 @@ public class QueryController {
         }
     }
 
+    /**
+     * 收藏房源。
+     */
+    @PostMapping("/favorite")
+    public ResponseEntity<Map<String, Object>> addFavorite(
+            @RequestParam("userId") Long userId,
+            @RequestParam("propertyId") Long propertyId) {
+
+        String sql = "INSERT INTO favorites (user_id, property_id, favorite_data) VALUES (?, ?, ?)" +
+                " ON DUPLICATE KEY UPDATE favorite_data = VALUES(favorite_data), created_at = CURRENT_TIMESTAMP";
+
+        try (Connection connection = getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setLong(1, userId);
+            ps.setLong(2, propertyId);
+            ps.setString(3, "{}");
+            ps.executeUpdate();
+
+            Map<String, Object> body = new HashMap<String, Object>();
+            body.put("message", "收藏成功");
+            body.put("userId", userId);
+            body.put("propertyId", propertyId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(body);
+        } catch (SQLException e) {
+            return buildError("收藏失败", e);
+        }
+    }
+
+    /**
+     * 取消收藏房源。
+     */
+    @DeleteMapping("/favorite")
+    public ResponseEntity<Map<String, Object>> removeFavorite(
+            @RequestParam("userId") Long userId,
+            @RequestParam("propertyId") Long propertyId) {
+
+        String sql = "DELETE FROM favorites WHERE user_id = ? AND property_id = ?";
+
+        try (Connection connection = getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            ps.setLong(2, propertyId);
+            int affected = ps.executeUpdate();
+
+            Map<String, Object> body = new HashMap<String, Object>();
+            body.put("userId", userId);
+            body.put("propertyId", propertyId);
+            body.put("message", affected > 0 ? "取消收藏成功" : "未找到对应的收藏记录");
+            return ResponseEntity.ok(body);
+        } catch (SQLException e) {
+            return buildError("取消收藏失败", e);
+        }
+    }
+
     public QueryController(@Value("${spring.datasource.url}") String jdbcUrl,
                            @Value("${spring.datasource.username}") String jdbcUsername,
                            @Value("${spring.datasource.password}") String jdbcPassword) {
@@ -53,20 +111,23 @@ public class QueryController {
     }
 
     /**
-     * 根据关键字与筛选条件查询房源列表。
-     *
-     * @param keyword   标题或小区关键字
-     * @param district  行政区
-     * @param minPrice  最低总价（万元）
-     * @param maxPrice  最高总价（万元）
-     * @return 查询结果
+     * 根据关键字与多种筛选条件查询房源列表。
      */
     @GetMapping
     public ResponseEntity<Map<String, Object>> search(
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "district", required = false) String district,
             @RequestParam(value = "minPrice", required = false) Double minPrice,
-            @RequestParam(value = "maxPrice", required = false) Double maxPrice) {
+            @RequestParam(value = "maxPrice", required = false) Double maxPrice,
+            @RequestParam(value = "propertyType", required = false) String propertyType,
+            @RequestParam(value = "orientation", required = false) String orientation,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "minBedrooms", required = false) Integer minBedrooms,
+            @RequestParam(value = "maxBedrooms", required = false) Integer maxBedrooms,
+            @RequestParam(value = "minArea", required = false) Double minArea,
+            @RequestParam(value = "maxArea", required = false) Double maxArea,
+            @RequestParam(value = "minViewCount", required = false) Integer minViewCount,
+            @RequestParam(value = "maxViewCount", required = false) Integer maxViewCount) {
 
         String baseSql = "SELECT p.property_id, p.title, p.status, p.price_info, p.layout_info, p.basic_info, " +
                 "p.view_count, p.favorite_count, p.updated_at, c.name AS community_name, c.location_info " +
@@ -97,6 +158,51 @@ public class QueryController {
             params.add(maxPrice);
         }
 
+        if (hasText(propertyType)) {
+            sqlBuilder.append(" AND JSON_UNQUOTE(JSON_EXTRACT(p.basic_info,'$.property_type')) = ?");
+            params.add(propertyType.trim());
+        }
+
+        if (hasText(orientation)) {
+            sqlBuilder.append(" AND JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.orientation')) = ?");
+            params.add(orientation.trim());
+        }
+
+        if (hasText(status)) {
+            sqlBuilder.append(" AND p.status = ?");
+            params.add(status.trim());
+        }
+
+        if (minBedrooms != null) {
+            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.bedroom_count')) AS UNSIGNED) >= ?");
+            params.add(minBedrooms);
+        }
+
+        if (maxBedrooms != null) {
+            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.bedroom_count')) AS UNSIGNED) <= ?");
+            params.add(maxBedrooms);
+        }
+
+        if (minArea != null) {
+            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.area')) AS DECIMAL(12,2)) >= ?");
+            params.add(minArea);
+        }
+
+        if (maxArea != null) {
+            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.area')) AS DECIMAL(12,2)) <= ?");
+            params.add(maxArea);
+        }
+
+        if (minViewCount != null) {
+            sqlBuilder.append(" AND p.view_count >= ?");
+            params.add(minViewCount);
+        }
+
+        if (maxViewCount != null) {
+            sqlBuilder.append(" AND p.view_count <= ?");
+            params.add(maxViewCount);
+        }
+
         sqlBuilder.append(" ORDER BY p.updated_at DESC LIMIT 20");
 
         try (Connection connection = getConnection();
@@ -120,10 +226,7 @@ public class QueryController {
             return ResponseEntity.ok(response);
 
         } catch (SQLException e) {
-            Map<String, Object> error = new HashMap<String, Object>();
-            error.put("message", "查询失败");
-            error.put("error", e.getMessage());
-            return ResponseEntity.internalServerError().body(error);
+            return buildError("查询失败", e);
         }
     }
 
@@ -161,5 +264,12 @@ public class QueryController {
 
     private Connection getConnection() throws SQLException {
         return DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+    }
+
+    private ResponseEntity<Map<String, Object>> buildError(String message, Exception e) {
+        Map<String, Object> error = new HashMap<String, Object>();
+        error.put("message", message);
+        error.put("error", e.getMessage());
+        return ResponseEntity.internalServerError().body(error);
     }
 }

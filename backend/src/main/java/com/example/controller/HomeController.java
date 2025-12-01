@@ -120,16 +120,30 @@ public class HomeController {
      */
     @GetMapping("/guess-you-like")
     public ResponseEntity<Map<String, Object>> guessYouLike() {
-        List<Map<String, Object>> recommendations = Arrays.asList(
+        return ResponseEntity.ok(buildRecommendationResponse("猜你喜欢数据（示例）"));
+    }
+
+    /**
+     * 去往查询界面的入口接口，复用猜你喜欢数据，方便前端在跳转前展示推荐内容。
+     */
+    @GetMapping("/go-query")
+    public ResponseEntity<Map<String, Object>> goQueryPage() {
+        return ResponseEntity.ok(buildRecommendationResponse("查询页推荐数据（示例）"));
+    }
+
+    private Map<String, Object> buildRecommendationResponse(String message) {
+        Map<String, Object> body = new HashMap<String, Object>();
+        body.put("items", buildGuessItems());
+        body.put("message", message);
+        return body;
+    }
+
+    private List<Map<String, Object>> buildGuessItems() {
+        return Arrays.asList(
                 buildGuessItem(101L, "万科城市花园 精装三房 南向采光好", "南山区 · 89.5㎡ · 3室2厅2卫", 650.5, "https://example.com/property/101"),
                 buildGuessItem(102L, "华润城 四房大户型 学区房", "福田区 · 128㎡ · 4室2厅3卫", 980.0, "https://example.com/property/102"),
                 buildGuessItem(103L, "科技园 地铁口复式 Loft", "南山区 · 68㎡ · 2室1厅1卫", 520.0, "https://example.com/property/103")
         );
-
-        Map<String, Object> body = new HashMap<String, Object>();
-        body.put("items", recommendations);
-        body.put("message", "猜你喜欢数据（示例）");
-        return ResponseEntity.ok(body);
     }
 
     private Map<String, Object> buildGuessItem(Long propertyId, String title, String summary, Double price, String url) {
