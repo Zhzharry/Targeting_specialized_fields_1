@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="dd1eff31-28b5-46bd-85dd-96e173f4b85b" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/controller/ProfileController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/controller/ProfileController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/文档/我的页面.md" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/文档/我的页面.md" afterDir="false" />
-    </list>
+    <list default="true" id="dd1eff31-28b5-46bd-85dd-96e173f4b85b" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -37,7 +34,7 @@
     "git-widget-placeholder": "main",
     "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "D:/programming/demo/Targeting_specialized_fields_1",
+    "last_opened_file_path": "D:/programming/demo/Targeting_specialized_fields_1/backend",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -101,6 +98,7 @@
       <workItem from="1760314585736" duration="669000" />
       <workItem from="1760610690719" duration="2996000" />
       <workItem from="1764247301188" duration="80000" />
+      <workItem from="1764592462917" duration="73000" />
     </task>
     <servers />
   </component>

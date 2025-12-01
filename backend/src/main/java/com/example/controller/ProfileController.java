@@ -131,13 +131,13 @@ public class ProfileController {
 
         try {
             double predicted = predictionService.predict(city, features);
-            Map<String, Object> result = new HashMap<String, Object>();
+        Map<String, Object> result = new HashMap<String, Object>();
             result.put("city", city);
             result.put("features", features);
             result.put("predictedPricePerSquareMeter", predicted);
-            result.put("unit", "万元/㎡");
+        result.put("unit", "万元/㎡");
             result.put("message", "预测成功");
-            return ResponseEntity.ok(result);
+        return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             return error(HttpStatus.BAD_REQUEST, e.getMessage());
         } catch (FileNotFoundException e) {
