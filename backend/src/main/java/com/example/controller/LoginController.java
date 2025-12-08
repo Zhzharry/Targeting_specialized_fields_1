@@ -2,7 +2,7 @@ package com.example.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -30,27 +30,12 @@ import java.util.Objects;
 @CrossOrigin(origins = "http://localhost:5173")
 public class LoginController {
 
-    private static final String MYSQL_DRIVER = "com.mysql.cj.jdbc.Driver";
-
-    private final String jdbcUrl;
-    private final String jdbcUsername;
-    private final String jdbcPassword;
+    private final DataSource dataSource;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    static {
-        try {
-            Class.forName(MYSQL_DRIVER);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("未找到MySQL驱动，请确认已添加mysql-connector-java依赖", e);
-        }
-    }
-
-    public LoginController(@Value("${spring.datasource.url}") String jdbcUrl,
-                           @Value("${spring.datasource.username}") String jdbcUsername,
-                           @Value("${spring.datasource.password}") String jdbcPassword) {
-        this.jdbcUrl = jdbcUrl;
-        this.jdbcUsername = jdbcUsername;
-        this.jdbcPassword = jdbcPassword;
+    @Autowired
+    public LoginController(DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     /**
@@ -102,28 +87,44 @@ public class LoginController {
     /**
      * 注册接口：创建新用户。
      *
-     * @param payload 前端传递的注册信息（username、password、user_profile等）
+     * @param payload 前端传递的注册信息（username、password、phone_number、user_profile等）
      * @return 注册结果
      */
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, Object> payload) {
         String username = asTrimmedString(payload.get("username"));
         String password = asTrimmedString(payload.get("password"));
+        String phoneNumber = asTrimmedString(payload.get("phone_number"));
 
         if (username == null || password == null) {
             return badRequest("用户名和密码不能为空");
         }
+        
+        if (phoneNumber == null) {
+            return badRequest("手机号不能为空");
+        }
 
-        String checkSql = "SELECT COUNT(1) FROM users WHERE username = ?";
-        String insertSql = "INSERT INTO users (username, password, user_profile) VALUES (?, ?, ?)";
+        String checkUsernameSql = "SELECT COUNT(1) FROM users WHERE username = ?";
+        String checkPhoneSql = "SELECT COUNT(1) FROM users WHERE phone_number = ?";
+        String insertSql = "INSERT INTO users (username, password, phone_number, user_profile) VALUES (?, ?, ?, ?)";
 
         try (Connection connection = getConnection()) {
             // 检查用户名是否已存在
-            try (PreparedStatement checkStatement = connection.prepareStatement(checkSql)) {
+            try (PreparedStatement checkStatement = connection.prepareStatement(checkUsernameSql)) {
                 checkStatement.setString(1, username);
                 try (ResultSet resultSet = checkStatement.executeQuery()) {
                     if (resultSet.next() && resultSet.getInt(1) > 0) {
                         return conflict("用户名已存在");
+                    }
+                }
+            }
+            
+            // 检查手机号是否已存在
+            try (PreparedStatement checkStatement = connection.prepareStatement(checkPhoneSql)) {
+                checkStatement.setString(1, phoneNumber);
+                try (ResultSet resultSet = checkStatement.executeQuery()) {
+                    if (resultSet.next() && resultSet.getInt(1) > 0) {
+                        return conflict("手机号已被注册");
                     }
                 }
             }
@@ -133,7 +134,8 @@ public class LoginController {
             try (PreparedStatement insertStatement = connection.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
                 insertStatement.setString(1, username);
                 insertStatement.setString(2, password);
-                insertStatement.setString(3, profileJson);
+                insertStatement.setString(3, phoneNumber);
+                insertStatement.setString(4, profileJson);
                 insertStatement.executeUpdate();
 
                 Long userId = null;
@@ -155,7 +157,7 @@ public class LoginController {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+        return dataSource.getConnection();
     }
 
     private String asTrimmedString(Object value) {

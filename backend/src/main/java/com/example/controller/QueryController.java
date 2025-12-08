@@ -2,7 +2,7 @@ package com.example.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -33,20 +33,8 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:5173")
 public class QueryController {
 
-    private static final String MYSQL_DRIVER = "com.mysql.cj.jdbc.Driver";
-
-    private final String jdbcUrl;
-    private final String jdbcUsername;
-    private final String jdbcPassword;
+    private final DataSource dataSource;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    static {
-        try {
-            Class.forName(MYSQL_DRIVER);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("未找到MySQL驱动，请确认已添加mysql-connector-java依赖", e);
-        }
-    }
 
     /**
      * 收藏房源。
@@ -56,22 +44,67 @@ public class QueryController {
             @RequestParam("userId") Long userId,
             @RequestParam("propertyId") Long propertyId) {
 
-        String sql = "INSERT INTO favorites (user_id, property_id, favorite_data) VALUES (?, ?, ?)" +
-                " ON DUPLICATE KEY UPDATE favorite_data = VALUES(favorite_data), created_at = CURRENT_TIMESTAMP";
+        try (Connection connection = getConnection()) {
+            // 验证用户是否存在
+            String checkUserSql = "SELECT COUNT(1) FROM users WHERE user_id = ?";
+            try (PreparedStatement checkUser = connection.prepareStatement(checkUserSql)) {
+                checkUser.setLong(1, userId);
+                try (ResultSet rs = checkUser.executeQuery()) {
+                    if (!rs.next() || rs.getInt(1) == 0) {
+                        Map<String, Object> error = new HashMap<String, Object>();
+                        error.put("message", "用户不存在");
+                        error.put("userId", userId);
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                    }
+                }
+            }
 
-        try (Connection connection = getConnection();
-             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setLong(1, userId);
-            ps.setLong(2, propertyId);
-            ps.setString(3, "{}");
-            ps.executeUpdate();
+            // 验证房源是否存在
+            String checkPropertySql = "SELECT COUNT(1) FROM properties WHERE property_id = ?";
+            try (PreparedStatement checkProperty = connection.prepareStatement(checkPropertySql)) {
+                checkProperty.setLong(1, propertyId);
+                try (ResultSet rs = checkProperty.executeQuery()) {
+                    if (!rs.next() || rs.getInt(1) == 0) {
+                        Map<String, Object> error = new HashMap<String, Object>();
+                        error.put("message", "房源不存在");
+                        error.put("propertyId", propertyId);
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                    }
+                }
+            }
 
-            Map<String, Object> body = new HashMap<String, Object>();
-            body.put("message", "收藏成功");
-            body.put("userId", userId);
-            body.put("propertyId", propertyId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(body);
+            // 插入收藏记录
+            String sql = "INSERT INTO favorites (user_id, property_id, favorite_data) VALUES (?, ?, ?)" +
+                    " ON DUPLICATE KEY UPDATE favorite_data = VALUES(favorite_data), created_at = CURRENT_TIMESTAMP";
+
+            try (PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                ps.setLong(1, userId);
+                ps.setLong(2, propertyId);
+                ps.setString(3, "{}");
+                ps.executeUpdate();
+
+                Map<String, Object> body = new HashMap<String, Object>();
+                body.put("message", "收藏成功");
+                body.put("userId", userId);
+                body.put("propertyId", propertyId);
+                return ResponseEntity.status(HttpStatus.CREATED).body(body);
+            }
         } catch (SQLException e) {
+            // 处理外键约束错误，提供更友好的提示
+            String errorMessage = e.getMessage();
+            if (errorMessage != null && errorMessage.contains("foreign key constraint")) {
+                if (errorMessage.contains("property_id")) {
+                    Map<String, Object> error = new HashMap<String, Object>();
+                    error.put("message", "房源不存在，无法收藏");
+                    error.put("propertyId", propertyId);
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                } else if (errorMessage.contains("user_id")) {
+                    Map<String, Object> error = new HashMap<String, Object>();
+                    error.put("message", "用户不存在，无法收藏");
+                    error.put("userId", userId);
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                }
+            }
             return buildError("收藏失败", e);
         }
     }
@@ -102,12 +135,9 @@ public class QueryController {
         }
     }
 
-    public QueryController(@Value("${spring.datasource.url}") String jdbcUrl,
-                           @Value("${spring.datasource.username}") String jdbcUsername,
-                           @Value("${spring.datasource.password}") String jdbcPassword) {
-        this.jdbcUrl = jdbcUrl;
-        this.jdbcUsername = jdbcUsername;
-        this.jdbcPassword = jdbcPassword;
+    @Autowired
+    public QueryController(DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     /**
@@ -263,7 +293,7 @@ public class QueryController {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+        return dataSource.getConnection();
     }
 
     private ResponseEntity<Map<String, Object>> buildError(String message, Exception e) {

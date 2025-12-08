@@ -2,7 +2,7 @@ package com.example.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -29,27 +29,12 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:5173")
 public class HomeController {
 
-    private static final String MYSQL_DRIVER = "com.mysql.cj.jdbc.Driver";
-
-    private final String jdbcUrl;
-    private final String jdbcUsername;
-    private final String jdbcPassword;
+    private final DataSource dataSource;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    static {
-        try {
-            Class.forName(MYSQL_DRIVER);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("未找到MySQL驱动，请确认已添加mysql-connector-java依赖", e);
-        }
-    }
-
-    public HomeController(@Value("${spring.datasource.url}") String jdbcUrl,
-                          @Value("${spring.datasource.username}") String jdbcUsername,
-                          @Value("${spring.datasource.password}") String jdbcPassword) {
-        this.jdbcUrl = jdbcUrl;
-        this.jdbcUsername = jdbcUsername;
-        this.jdbcPassword = jdbcPassword;
+    @Autowired
+    public HomeController(DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
     /**
@@ -179,6 +164,6 @@ public class HomeController {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+        return dataSource.getConnection();
     }
 }
