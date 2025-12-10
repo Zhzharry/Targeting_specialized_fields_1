@@ -18,6 +18,17 @@ interface RegisterResponse {
   [key: string]: unknown
 }
 
+// 定义Axios错误类型
+interface AxiosError {
+  response?: {
+    status?: number
+    data?: {
+      message?: string
+    }
+  }
+  message?: string
+}
+
 // 创建认证Store的工厂函数
 export function createAuthStore(context: RootStoreContext) {
   const { api } = context
@@ -82,14 +93,19 @@ export function createAuthStore(context: RootStoreContext) {
         console.error('API登录失败:', error)
 
         let errorMessage = '网络错误，请重试'
+
         if (error instanceof Error) {
           errorMessage = error.message
-        } else if (typeof error === 'object' && error !== null) {
-          const err = error as { message?: string; response?: { status?: number } }
-          if (err.response?.status === 401) {
+        } else if (error && typeof error === 'object') {
+          // 类型安全的错误处理
+          const axiosError = error as AxiosError
+
+          if (axiosError.response?.status === 401) {
             errorMessage = '用户名或密码错误'
-          } else if (err.message) {
-            errorMessage = err.message
+          } else if (axiosError.response?.data?.message) {
+            errorMessage = axiosError.response.data.message
+          } else if (axiosError.message) {
+            errorMessage = axiosError.message
           }
         }
 
@@ -99,45 +115,97 @@ export function createAuthStore(context: RootStoreContext) {
       }
     }
 
-    // 注册方法 - 修正：添加phone_number参数
-    const register = async (
-      usernameInput: string,
-      password: string,
-      phoneNumber: string,  // 新增：手机号参数
-      userProfile?: Record<string, unknown>  // 可选的用户资料
-    ) => {
-      try {
-        const response = await api.auth.register({
-          username: usernameInput,
-          password: password,
-          phone_number: phoneNumber,  // 添加手机号
-          user_profile: userProfile || {}  // 可选的用户资料
-        }) as RegisterResponse
+    // 注册方法
+// auth.store.ts 中的 register 方法 - 修复版本（没有any）
+const register = async (
+  usernameInput: string,
+  password: string,
+  phoneNumber: string,
+  userProfile?: Record<string, unknown>
+) => {
+  try {
+    // 构建请求数据 - 使用正确类型
+    const requestData: {
+      username: string
+      password: string
+      phone_number: string
+      user_profile?: Record<string, unknown>
+    } = {
+      username: usernameInput,
+      password: password,
+      phone_number: phoneNumber
+    }
 
-        console.log('注册API响应:', response)
+    // 只有 userProfile 有内容时才添加
+    if (userProfile && Object.keys(userProfile).length > 0) {
+      console.log('📤 Store层发送的user_profile:', userProfile)
+      requestData.user_profile = userProfile
+    } else {
+      console.log('📤 Store层: 不发送user_profile')
+    }
 
-        if (response && typeof response.userId === 'number') {
-          // 注册成功后自动登录
-          return login(usernameInput, password)
+    console.log('📨 Store层完整请求数据:', JSON.stringify(requestData, null, 2))
+
+    const response = await api.auth.register(requestData) as RegisterResponse
+
+    console.log('✅ Store层注册API响应:', response)
+
+    if (response && typeof response.userId === 'number') {
+      // 注册成功后自动登录
+      return login(usernameInput, password)
+    }
+
+    const errorMsg = response?.message || '注册失败：服务器返回无效数据'
+    console.error('❌ Store层注册失败:', errorMsg)
+    return { success: false, error: errorMsg }
+
+  } catch (error: unknown) {
+    console.error('🔥 Store层API注册失败详细:', error)
+
+    let errorMessage = '注册失败，请重试'
+
+    // 类型安全的错误处理
+    if (error instanceof Error) {
+      errorMessage = error.message
+    } else if (error && typeof error === 'object') {
+      // 定义Axios错误类型
+      interface AxiosErrorType {
+        response?: {
+          status?: number
+          data?: {
+            message?: string
+            error?: string
+          }
         }
+        message?: string
+      }
 
-        const errorMsg = response?.message || '注册失败：服务器返回无效数据'
-        return { success: false, error: errorMsg }
+      const axiosError = error as AxiosErrorType
 
-      } catch (error: unknown) {
-        console.error('API注册失败:', error)
+      console.error('🔥 Axios错误详情:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        message: axiosError.message
+      })
 
-        let errorMessage = '注册失败，请重试'
-        if (error instanceof Error) {
-          errorMessage = error.message
-        } else if (typeof error === 'object' && error !== null) {
-          const err = error as { message?: string }
-          if (err.message) errorMessage = err.message
+      if (axiosError.response?.status === 400) {
+        if (axiosError.response?.data?.message) {
+          errorMessage = `注册失败：${axiosError.response.data.message}`
+        } else if (axiosError.response?.data?.error) {
+          errorMessage = `注册失败：${axiosError.response.data.error}`
+        } else {
+          errorMessage = '注册失败：请求数据格式错误'
         }
-
-        throw new Error(errorMessage)
+      } else if (axiosError.response?.data?.message) {
+        errorMessage = axiosError.response.data.message
+      } else if (axiosError.message) {
+        errorMessage = axiosError.message
       }
     }
+
+    throw new Error(errorMessage)
+  }
+}
 
     const logout = () => {
       // 可以调用 api.auth.logout() 如果后端需要
@@ -164,7 +232,7 @@ export function createAuthStore(context: RootStoreContext) {
       // 方法
       initialize,
       login,
-      register,  // 现在需要传入phone_number
+      register,
       logout,
       clearAuth
     }
