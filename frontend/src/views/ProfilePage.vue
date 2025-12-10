@@ -252,7 +252,11 @@
             <p class="empty-text">暂无浏览记录</p>
           </div>
           <div v-else class="history-list">
-            <div v-for="item in history" :key="item.id" class="history-item">
+            <div v-for="item in history"
+            :key="item.id"
+            class="history-item"
+            @click="goToSearchWithHistory(item)"
+            >
               <img :src="item.image" alt="房源" class="history-img" />
               <div class="history-info">
                 <h4 class="history-title">{{ item.title }}</h4>
@@ -273,7 +277,15 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-
+// 在 <script setup> 顶部添加这个接口定义
+interface HistoryItem {
+  id: number
+  title: string
+  community: string
+  price: number
+  image: string
+  time: string
+}
 const router = useRouter()
 // 用户信息
 const userInfo = reactive({
@@ -328,7 +340,7 @@ const favorites = ref([
   },
 ])
 
-const history = ref([
+const history = ref<HistoryItem[]>([
   {
     id: 1,
     title: '精装修两居室',
@@ -339,6 +351,24 @@ const history = ref([
   },
 ])
 
+
+const goToSearchWithHistory = (item: HistoryItem) => {
+  // 关闭历史记录弹窗
+  showHistory.value = false
+
+  // 构建搜索关键词（使用标题或小区名）
+  const searchKeyword = item.title || item.community
+
+  // 跳转到搜索页面，传递搜索关键词
+  router.push({
+    path: '/search',
+    query: {
+      keyword: searchKeyword,  // 搜索关键词
+      historyId: item.id,      // 历史记录ID（可选）
+      autoSearch: 'true'       // 自动搜索标记
+    }
+  })
+}
 // 方法
 const toggleRoomType = (roomType: string) => {
   const index = preferences.roomTypes.indexOf(roomType)

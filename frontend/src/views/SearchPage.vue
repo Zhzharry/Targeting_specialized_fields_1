@@ -1,4 +1,3 @@
-<!-- src/views/SearchPage.vue -->
 <template>
   <div class="search-page">
     <!-- 顶部导航 -->
@@ -20,19 +19,41 @@
           placeholder="输入小区名、区域或关键词..."
           @input="handleSearchInput"
           @focus="showSuggestions = true"
+          @blur="onSearchBlur"
         />
         <button @click="performSearch" class="search-btn">搜索</button>
       </div>
 
-      <!-- 搜索建议 -->
-      <div v-if="showSuggestions && searchSuggestions.length" class="suggestions">
-        <div
-          v-for="suggestion in searchSuggestions"
-          :key="suggestion"
-          class="suggestion-item"
-          @click="selectSuggestion(suggestion)"
-        >
-          🔍 {{ suggestion }}
+      <!-- 搜索建议和搜索历史 -->
+      <div v-if="showSuggestions" class="suggestions">
+        <!-- 搜索历史 -->
+        <div v-if="searchHistory.length > 0" class="history-section">
+          <div class="section-title">搜索历史</div>
+          <div
+            v-for="item in searchHistory"
+            :key="item.id"
+            class="suggestion-item history-item"
+            @click="searchFromHistory(item)"
+          >
+            🕒 {{ item.keyword }}
+            <span class="delete-history" @click.stop="deleteHistory(item)">×</span>
+          </div>
+          <div v-if="searchHistory.length > 0" class="clear-history" @click="clearAllHistory">
+            清空搜索历史
+          </div>
+        </div>
+
+        <!-- 搜索建议 -->
+        <div v-if="searchSuggestions.length > 0" class="suggestion-section">
+          <div class="section-title">搜索建议</div>
+          <div
+            v-for="suggestion in searchSuggestions"
+            :key="suggestion"
+            class="suggestion-item"
+            @click="selectSuggestion(suggestion)"
+          >
+            🔍 {{ suggestion }}
+          </div>
         </div>
       </div>
     </div>
@@ -210,7 +231,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
 
 // 搜索状态
 const searchQuery = ref('')
@@ -218,9 +242,13 @@ const showSuggestions = ref(false)
 const loading = ref(false)
 const activeTab = ref('search')
 const activeFilter = ref('all')
+const fromHistory = ref(false)
 
 // 搜索建议
 const searchSuggestions = ref<string[]>([])
+
+// 搜索历史
+const searchHistory = ref<Array<{id: number, keyword: string, time: string}>>([])
 
 // 快速筛选
 const quickFilters = ref([
@@ -301,6 +329,24 @@ const mockProperties: Property[] = [
   },
 ]
 
+// 监听路由参数变化
+watch(() => route.query, (newQuery) => {
+  if (newQuery.keyword) {
+    // 设置搜索框内容
+    searchQuery.value = newQuery.keyword as string
+
+    // 标记来自历史记录
+    if (newQuery.fromHistory === 'true') {
+      fromHistory.value = true
+    }
+
+    // 自动执行搜索
+    setTimeout(() => {
+      performSearch()
+    }, 100)
+  }
+}, { immediate: true })
+
 // 方法
 const handleSearchInput = () => {
   if (searchQuery.value.length > 1) {
@@ -315,34 +361,55 @@ const handleSearchInput = () => {
   }
 }
 
+const onSearchBlur = () => {
+  // 延迟隐藏，给点击历史记录的时间
+  setTimeout(() => {
+    showSuggestions.value = false
+  }, 200)
+}
+
 const selectSuggestion = (suggestion: string) => {
   searchQuery.value = suggestion
   showSuggestions.value = false
+  fromHistory.value = false
   performSearch()
 }
 
+// 修改 performSearch 方法中的搜索逻辑
 const performSearch = async () => {
   loading.value = true
   showSuggestions.value = false
 
+  // 如果不是来自历史记录的跳转，添加到搜索历史
+  if (searchQuery.value && !fromHistory.value) {
+    addToSearchHistory(searchQuery.value)
+  }
+
   // 模拟搜索API调用
   setTimeout(() => {
-    if (searchQuery.value) {
+    if (searchQuery.value.trim()) {
+      const keyword = searchQuery.value.trim().toLowerCase()
       searchResults.value = mockProperties.filter(
         (property) =>
-          property.community.includes(searchQuery.value) ||
-          property.title.includes(searchQuery.value),
+          property.community.toLowerCase().includes(keyword) ||
+          property.title.toLowerCase().includes(keyword) ||
+          property.tags.some(tag => tag.toLowerCase().includes(keyword))
       )
     } else {
       searchResults.value = [...mockProperties]
     }
     loading.value = false
-  }, 1000)
+
+    // 重置历史记录标记
+    fromHistory.value = false
+
+    // 确保显示搜索结果标签页
+    activeTab.value = 'search'
+  }, 500)
 }
 
 const setActiveFilter = (filter: string) => {
   activeFilter.value = filter
-  // 这里可以根据筛选条件过滤结果
   performSearch()
 }
 
@@ -355,12 +422,94 @@ const resetSearch = () => {
   searchQuery.value = ''
   searchResults.value = []
   activeTab.value = 'search'
+  fromHistory.value = false
 }
 
 const viewProperty = (propertyId: number) => {
-  // 这里可以跳转到详情页，暂时用alert代替
   alert(`查看房源详情: ${propertyId}`)
-  // router.push(`/property/${propertyId}`)
+}
+
+// 搜索历史相关方法
+// 修改 loadSearchHistory 方法
+const loadSearchHistory = () => {
+  const savedHistory = localStorage.getItem('searchHistory')
+  if (savedHistory) {
+    try {
+      const parsed: Array<{id: number, keyword: string, time: string}> = JSON.parse(savedHistory)
+      // 过滤确保数据结构正确
+      searchHistory.value = parsed.filter(item =>
+        item &&
+        typeof item === 'object' &&
+        'id' in item &&
+        'keyword' in item &&
+        'time' in item
+      )
+    } catch (error) {
+      console.error('加载搜索历史失败:', error)
+      searchHistory.value = []
+    }
+  }
+}
+
+const addToSearchHistory = (keyword: string) => {
+  if (!keyword || keyword.trim() === '') {
+    return
+  }
+
+  const trimmedKeyword = keyword.trim()
+  // 创建新数组操作
+  const newHistory = [...searchHistory.value]
+  const existingIndex = newHistory.findIndex(item => item.keyword === trimmedKeyword)
+
+  if (existingIndex !== -1) {
+    // 如果已存在，先移除
+    newHistory.splice(existingIndex, 1)
+  }
+
+  // 添加新的搜索历史到开头
+  const newItem = {
+    id: Date.now(),
+    keyword: trimmedKeyword,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+  newHistory.unshift(newItem)
+
+  // 限制历史记录数量
+  if (newHistory.length > 10) {
+    newHistory.pop()
+  }
+
+  // 更新数组
+  searchHistory.value = newHistory
+
+  // 保存到localStorage
+  localStorage.setItem('searchHistory', JSON.stringify(newHistory))
+}
+
+const searchFromHistory = (item: {id: number, keyword: string, time: string}) => {
+  if (!item) return
+
+  searchQuery.value = item.keyword
+  showSuggestions.value = false
+  fromHistory.value = true
+
+  // 添加日志，调试用
+  console.log('从历史记录搜索:', item.keyword)
+
+  performSearch()
+}
+
+const deleteHistory = (item: {id: number, keyword: string, time: string}) => {
+  // 安全处理
+  if (!item) return
+
+  searchHistory.value = searchHistory.value.filter(historyItem => historyItem.id !== item.id)
+  localStorage.setItem('searchHistory', JSON.stringify(searchHistory.value))
+}
+
+const clearAllHistory = () => {
+  searchHistory.value = []
+  localStorage.removeItem('searchHistory')
 }
 
 // 摇一摇功能
@@ -386,6 +535,9 @@ const handleDeviceMotion = (event: DeviceMotionEvent) => {
 
 // 初始化
 onMounted(() => {
+  // 加载搜索历史
+  loadSearchHistory()
+
   // 初始加载热门推荐
   hotProperties.value = [...mockProperties]
   discoverProperties.value = [...mockProperties].slice(0, 2)
@@ -409,7 +561,12 @@ onUnmounted(() => {
   background: #f5f5f5;
   padding-bottom: 60px;
 }
-
+.search-keyword {
+  margin-left: 10px;
+  color: #007bff;
+  font-size: 12px;
+  font-style: italic;
+}
 .header {
   display: flex;
   justify-content: space-between;
@@ -475,6 +632,26 @@ onUnmounted(() => {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-section,
+.suggestion-section {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.history-section:last-child,
+.suggestion-section:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+  background: #f8f9fa;
 }
 
 .suggestion-item {
@@ -485,6 +662,37 @@ onUnmounted(() => {
 }
 
 .suggestion-item:hover {
+  background: #f8f9fa;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.delete-history {
+  color: #ccc;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 18px;
+  transition: color 0.2s;
+}
+
+.delete-history:hover {
+  color: #ff4757;
+}
+
+.clear-history {
+  text-align: center;
+  padding: 12px 16px;
+  color: #007bff;
+  cursor: pointer;
+  border-top: 1px solid #f0f0f0;
+  font-size: 14px;
+}
+
+.clear-history:hover {
   background: #f8f9fa;
 }
 
