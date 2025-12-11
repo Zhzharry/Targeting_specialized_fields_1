@@ -1,4 +1,6 @@
 import api from './index'
+import type { ProfileDetailResponse } from '../types/api.types'
+
 import type {
   PreferenceRequest,
   PreferenceResponse,
@@ -27,5 +29,8 @@ export const profileAPI = {
   // 4.4 收藏列表
   getFavorites(userId: number): Promise<FavoritesResponse> {
     return api.get('/profile/favorites', { params: { userId } })
+  },
+  getMyProfile(userId: number): Promise<ProfileDetailResponse> {
+    return api.get('/home/me', { params: { userId } })
   }
 }
