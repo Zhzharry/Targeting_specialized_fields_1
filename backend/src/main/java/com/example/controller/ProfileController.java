@@ -30,6 +30,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+
+import org.springframework.http.HttpStatus;
+import java.util.*;
+import java.util.stream.Collectors;
+
 /**
  * 我的页面（个人中心）接口控制器。
  * 统一对接用户偏好、房价预测、历史记录、收藏等功能：
