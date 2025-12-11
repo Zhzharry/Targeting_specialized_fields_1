@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -49,9 +50,30 @@ public class HousePricePredictionService {
     private final String pythonExecutable;
 
     public HousePricePredictionService(
-            @Value("${predictor.model-base-dir:backend/src/main/java/com/example/service/predict_zhz}") String modelBaseDir,
+            @Value("${predictor.model-base-dir:src/main/java/com/example/service/predict_zhz}") String modelBaseDir,
             @Value("${predictor.python-exec:python}") String pythonExecutable) {
-        this.modelBaseDir = Paths.get(modelBaseDir).toAbsolutePath().normalize();
+        // 处理路径：如果是相对路径，从当前工作目录解析
+        Path basePath = Paths.get(modelBaseDir);
+        if (!basePath.isAbsolute()) {
+            Path currentDir = Paths.get("").toAbsolutePath().normalize();
+            // 检查当前目录是否是 backend 目录
+            String currentDirName = currentDir.getFileName().toString();
+            if ("backend".equals(currentDirName)) {
+                // 当前目录就是 backend，直接使用
+                this.modelBaseDir = currentDir.resolve(modelBaseDir).normalize();
+            } else {
+                // 当前目录不是 backend，尝试查找 backend 目录
+                Path backendDir = currentDir.resolve("backend");
+                if (Files.exists(backendDir) && Files.isDirectory(backendDir)) {
+                    this.modelBaseDir = backendDir.resolve(modelBaseDir).normalize();
+                } else {
+                    // 如果找不到 backend 目录，假设当前目录就是项目根目录
+                    this.modelBaseDir = currentDir.resolve(modelBaseDir).normalize();
+                }
+            }
+        } else {
+            this.modelBaseDir = basePath.normalize();
+        }
         this.pythonScript = this.modelBaseDir.resolve("predict_price.py");
         this.pythonExecutable = pythonExecutable;
     }
@@ -81,7 +103,17 @@ public class HousePricePredictionService {
         request.put("features", features);
 
         ProcessBuilder builder = new ProcessBuilder(pythonExecutable, pythonScript.toString());
-        builder.redirectErrorStream(true);
+        // Java 8 兼容：重定向 stderr 到 null 设备（Windows 使用 NUL，Linux/Mac 使用 /dev/null）
+        String os = System.getProperty("os.name").toLowerCase();
+        File nullFile;
+        if (os.contains("win")) {
+            // Windows 使用 NUL
+            nullFile = new File("NUL");
+        } else {
+            // Linux/Mac 使用 /dev/null
+            nullFile = new File("/dev/null");
+        }
+        builder.redirectError(nullFile);  // 丢弃 stderr 输出（Java 8 兼容）
         Process process = builder.start();
 
         try (BufferedWriter writer = new BufferedWriter(

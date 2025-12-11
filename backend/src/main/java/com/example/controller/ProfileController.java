@@ -4,7 +4,6 @@ import com.example.service.predict_zhz.HousePricePredictionService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -15,9 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.sql.DataSource;
 import java.io.FileNotFoundException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -48,11 +47,7 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "http://localhost:5173")
 public class ProfileController {
 
-    private static final String MYSQL_DRIVER = "com.mysql.cj.jdbc.Driver";
-
-    private final String jdbcUrl;
-    private final String jdbcUsername;
-    private final String jdbcPassword;
+    private final DataSource dataSource;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HousePricePredictionService predictionService;
     private static final Set<String> ALLOWED_PREFERENCE_FIELDS = new HashSet<String>(Arrays.asList(
@@ -69,22 +64,10 @@ public class ProfileController {
             "budget"
     ));
 
-    static {
-        try {
-            Class.forName(MYSQL_DRIVER);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("未找到MySQL驱动，请确认已添加mysql-connector-java依赖", e);
-        }
-    }
-
     @Autowired
-    public ProfileController(@Value("${spring.datasource.url}") String jdbcUrl,
-                             @Value("${spring.datasource.username}") String jdbcUsername,
-                             @Value("${spring.datasource.password}") String jdbcPassword,
+    public ProfileController(DataSource dataSource,
                              HousePricePredictionService predictionService) {
-        this.jdbcUrl = jdbcUrl;
-        this.jdbcUsername = jdbcUsername;
-        this.jdbcPassword = jdbcPassword;
+        this.dataSource = dataSource;
         this.predictionService = predictionService;
     }
 
@@ -158,6 +141,10 @@ public class ProfileController {
      */
     @GetMapping("/history")
     public ResponseEntity<Map<String, Object>> history(@RequestParam("userId") Long userId) {
+        if (userId == null) {
+            return error(HttpStatus.BAD_REQUEST, "userId 参数不能为空");
+        }
+
         String sql = "SELECT bh.history_id, bh.property_id, bh.behavior_data, bh.created_at, " +
                 "p.title, p.price_info, p.layout_info " +
                 "FROM browsing_history bh " +
@@ -191,6 +178,10 @@ public class ProfileController {
      */
     @GetMapping("/favorites")
     public ResponseEntity<Map<String, Object>> favorites(@RequestParam("userId") Long userId) {
+        if (userId == null) {
+            return error(HttpStatus.BAD_REQUEST, "userId 参数不能为空");
+        }
+
         String sql = "SELECT f.favorite_id, f.property_id, f.created_at, " +
                 "p.title, p.price_info, p.layout_info " +
                 "FROM favorites f " +
@@ -302,7 +293,7 @@ public class ProfileController {
     }
 
     private Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(jdbcUrl, jdbcUsername, jdbcPassword);
+        return dataSource.getConnection();
     }
 
     @SuppressWarnings("unchecked")
