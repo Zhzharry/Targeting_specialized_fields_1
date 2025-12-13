@@ -25,7 +25,6 @@
           <span class="user-tag"> {{ userInfo.location }}</span>
         </div>
       </div>
-
     </div>
 
     <!-- 数据统计 -->
@@ -258,18 +257,24 @@
             <p class="empty-text">暂无收藏房源</p>
             <button class="primary-btn" @click="$router.push('/search')">去浏览房源</button>
           </div>
-          <div v-else class="favorites-list">
-            <!-- 收藏弹窗中的显示 -->
-          <div v-for="item in favorites" :key="item.id" class="favorite-item">
-  <img :src="item.image" alt="房源" class="favorite-img" />
-  <div class="favorite-info">
-    <h4 class="favorite-title">{{ item.title }}</h4>
-    <p class="favorite-location">{{ item.community }}</p>
-    <div class="favorite-price">¥{{ item.price }}万</div>
+<div v-else class="favorites-list">
+  <!-- 收藏弹窗中的显示 -->
+  <div v-for="item in favorites" :key="item.id" class="favorite-item" @click="showPropertyDetailModal(item)">
+    <img :src="item.image" alt="房源" class="favorite-img" />
+    <div class="favorite-info">
+      <h4 class="favorite-title">{{ item.title }}</h4>
+      <p class="favorite-location">{{ item.community }}</p>
+      <div class="property-meta" v-if="item.layoutInfo">
+        <span v-if="item.layoutInfo.bedroom_count">
+          {{ item.layoutInfo.bedroom_count }}室
+        </span>
+        <span v-if="item.layoutInfo.area">{{ item.layoutInfo.area }}㎡</span>
+      </div>
+      <div class="favorite-price" v-if="item.price">¥{{ item.price }}万</div>
+    </div>
+    <button class="remove-btn" @click.stop="removeFavorite(item.id)">×</button>
   </div>
-  <button class="remove-btn" @click="removeFavorite(item.id)">×</button>
 </div>
-          </div>
         </div>
       </div>
     </div>
@@ -348,7 +353,7 @@
        <div v-for="item in history"
      :key="item.id"
      class="history-item"
-     @click="goToSearchWithHistory(item)"
+     @click="showPropertyDetailModal(item)"
 >
   <img :src="item.image" alt="房源" class="history-img" />
   <div class="history-info">
@@ -360,6 +365,55 @@
     </div>
   </div>
 </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 我添加的缺失的结束标签 -->
+  </div>
+
+  <!-- 房源详情弹窗 -->
+  <div v-if="showPropertyDetail" class="modal-overlay" @click="showPropertyDetail = false">
+    <div class="modal-content property-detail-modal" @click.stop>
+      <div class="modal-header">
+        <h3 class="modal-title">房源详情</h3>
+        <button class="close-btn" @click="showPropertyDetail = false">×</button>
+      </div>
+      <div class="modal-body property-detail-body">
+        <div v-if="selectedProperty" class="property-detail-content">
+          <div class="property-image-section">
+            <img :src="selectedProperty.image" :alt="selectedProperty.title" class="property-detail-image" />
+          </div>
+
+          <div class="property-basic-info">
+            <h2 class="property-title">{{ selectedProperty.title }}</h2>
+            <div class="property-price">¥{{ selectedProperty.price }}万</div>
+            <div class="property-community">{{ selectedProperty.community }}</div>
+          </div>
+
+          <div class="property-details">
+            <div class="detail-row">
+              <span class="detail-label">房源ID:</span>
+              <span class="detail-value">{{ selectedProperty.id }}</span>
+            </div>
+
+            <div class="detail-row" v-if="selectedProperty.time">
+              <span class="detail-label">浏览时间:</span>
+              <span class="detail-value">{{ selectedProperty.time }}</span>
+            </div>
+
+            <div class="actions-section">
+              <button
+                class="action-button favorite-button"
+                :class="{ favorited: isFavorited(selectedProperty.id) }"
+                @click="toggleFavorite(selectedProperty)"
+              >
+                {{ isFavorited(selectedProperty.id) ? '已收藏' : '收藏' }}
+              </button>
+              <button class="action-button contact-button">联系经纪人</button>
+              <button class="action-button buy-button" @click="handlePurchase(selectedProperty)">购买</button>
+            </div>
           </div>
         </div>
       </div>
@@ -384,6 +438,17 @@ interface HistoryItem {
   image: string
   time: string
 }
+
+// 添加房源详情接口定义
+interface PropertyDetail {
+  id: number
+  title: string
+  community: string
+  price: number
+  image: string
+  time?: string
+}
+
 // 新增：检查 localStorage 中是否有 token
 const hasLocalStorageToken = (): boolean => {
   try {
@@ -612,6 +677,9 @@ const fetchHistoryData = async () => {
   }
 }
 // 添加：获取收藏列表函数
+// 添加：获取收藏列表函数
+// 添加：获取收藏列表函数
+// 添加：获取收藏列表函数
 const fetchFavoritesData = async () => {
   if (!currentUserId.value) {
     router.push('/login')
@@ -628,9 +696,17 @@ const fetchFavoritesData = async () => {
         favoriteId: item.favoriteId,      // 收藏记录ID
         propertyId: item.propertyId,      // 房源ID（重要！用于取消收藏）
         title: item.title,
-        community: `${item.layoutInfo.area}㎡ ${item.layoutInfo.bedroom_count}室`,
-        price: item.priceInfo.total_price,
-        image: `https://picsum.photos/seed/${item.propertyId}/100/100`
+        community: `${item.layoutInfo?.area || 0}㎡ ${item.layoutInfo?.bedroom_count || 0}室`,
+        price: item.priceInfo?.total_price,
+        image: `https://picsum.photos/seed/${item.propertyId}/100/100`,
+        // 添加更多详细信息
+        layoutInfo: item.layoutInfo ? {
+          bedroom_count: item.layoutInfo.bedroom_count || 0,
+          living_room_count: 0, // API不返回此字段
+          bathroom_count: 0,    // API不返回此字段
+          area: item.layoutInfo.area || 0
+        } : undefined,
+        priceInfo: item.priceInfo
       }))
       favoritesCount.value = response.count
     } else {
@@ -828,6 +904,7 @@ const updateDistrictOptions = () => {
 
 // 收藏列表（初始为空，从API获取）
 
+// 收藏列表（初始为空，从API获取）
 const favorites = ref<Array<{
   id: number
   favoriteId: number      // 新增：收藏记录ID
@@ -836,28 +913,24 @@ const favorites = ref<Array<{
   community: string
   price: number
   image: string
+  // 新增详细信息字段
+  layoutInfo?: {
+    bedroom_count: number
+    living_room_count: number
+    bathroom_count: number
+    area: number
+  }
+  priceInfo?: {
+    total_price: number
+    unit_price: number
+  }
 }>>([])
 
 // 浏览记录（初始为空，从API获取）
 const history = ref<HistoryItem[]>([])
 
-const goToSearchWithHistory = (item: HistoryItem) => {
-  // 关闭历史记录弹窗
-  showHistory.value = false
+// 删除未使用的 goToSearchWithHistory 函数
 
-  // 构建搜索关键词（使用标题或小区名）
-  const searchKeyword = item.title || item.community
-
-  // 跳转到搜索页面，传递搜索关键词
-  router.push({
-    path: '/search',
-    query: {
-      keyword: searchKeyword,  // 搜索关键词
-      historyId: item.id,      // 历史记录ID（可选）
-      autoSearch: 'true'       // 自动搜索标记
-    }
-  })
-}
 // 方法
 const toggleHouseType = (houseType: string) => {
   const index = preferences.house_types.indexOf(houseType)
@@ -1041,6 +1114,66 @@ const handleLogout = () => {
   // 跳转到登录页面
   router.push('/login')
 }
+
+// 添加新的响应式数据
+const showPropertyDetail = ref(false)
+const selectedProperty = ref<PropertyDetail | null>(null)
+
+// 显示房源详情模态框
+const showPropertyDetailModal = (property: PropertyDetail) => {
+  selectedProperty.value = property
+  // 关闭当前打开的弹窗
+  showFavorites.value = false
+  showHistory.value = false
+  // 显示详情弹窗
+  showPropertyDetail.value = true
+}
+
+// 检查房源是否已收藏
+const isFavorited = (propertyId: number) => {
+  return favorites.value.some(fav => fav.id === propertyId)
+}
+
+// 切换收藏状态
+const toggleFavorite = async (property: PropertyDetail) => {
+  if (!currentUserId.value) {
+    router.push('/login')
+    return
+  }
+
+  try {
+    if (isFavorited(property.id)) {
+      // 取消收藏
+      await removeFavorite(property.id)
+    } else {
+      // 添加收藏
+      const response = await queryAPI.addFavorite(currentUserId.value, property.id)
+      if (response && response.message) {
+        // 更新本地收藏列表
+        favorites.value.push({
+          id: property.id,
+          favoriteId: Date.now(), // 临时ID
+          propertyId: property.id,
+          title: property.title,
+          community: property.community,
+          price: property.price,
+          image: property.image
+        })
+        favoritesCount.value = favorites.value.length
+      }
+    }
+  } catch (err) {
+    console.error('操作失败:', err)
+    alert('操作失败，请重试')
+  }
+}
+
+// 处理购买操作
+const handlePurchase = (property: PropertyDetail) => {
+  alert(`正在购买房源: ${property.title}`)
+  // 这里可以添加实际的购买逻辑
+}
+
 </script>
 
 <style scoped>
@@ -1805,5 +1938,136 @@ input:checked + .slider:before {
 
 .modal-body::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+/* 房源详情弹窗样式 */
+.property-detail-modal {
+  max-width: 600px;
+  max-height: 90vh;
+}
+
+.property-detail-body {
+  padding: 0;
+}
+
+.property-detail-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.property-image-section {
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+}
+
+.property-detail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.property-basic-info {
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.property-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.property-price {
+  font-size: 24px;
+  font-weight: bold;
+  color: #ff4757;
+  margin-bottom: 5px;
+}
+
+.property-community {
+  font-size: 14px;
+  color: #666;
+}
+
+.property-details {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.detail-row {
+  display: flex;
+  margin-bottom: 15px;
+}
+
+.detail-label {
+  font-weight: bold;
+  width: 80px;
+  color: #333;
+}
+
+.detail-value {
+  flex: 1;
+  color: #666;
+}
+
+.actions-section {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.action-button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.favorite-button {
+  background-color: #f1f1f1;
+  color: #333;
+}
+
+.favorite-button.favorited {
+  background-color: #ff4757;
+  color: white;
+}
+
+.contact-button {
+  background-color: #007bff;
+  color: white;
+}
+
+.buy-button {
+  background-color: #2ed573;
+  color: white;
+}
+
+.action-button:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+.property-meta {
+  display: flex;
+  gap: 12px;
+  margin: 4px 0;
+  color: #888;
+  font-size: 12px;
+}
+
+.favorite-location {
+  font-size: 13px;
+  color: #666;
+  margin: 2px 0;
 }
 </style>
