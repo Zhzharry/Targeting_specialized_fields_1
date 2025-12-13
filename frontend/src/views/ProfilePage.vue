@@ -21,29 +21,29 @@
         <h2 class="username">{{ userInfo.username }}</h2>
         <p class="user-desc">{{ userInfo.bio }}</p>
         <div class="user-tags">
-          <span class="user-tag">📱 {{ userInfo.phone }}</span>
-          <span class="user-tag">📍 {{ userInfo.location }}</span>
+          <span class="user-tag">{{ userInfo.phone }}</span>
+          <span class="user-tag"> {{ userInfo.location }}</span>
         </div>
       </div>
-      <button class="edit-btn" @click="editProfile">编辑资料</button>
+
     </div>
 
     <!-- 数据统计 -->
     <div class="stats-grid">
     <div class="stat-item" @click="fetchFavoritesData">
         <div class="stat-icon">❤️</div>
-        <div class="stat-number">{{ favoritesCount }}</div>
+
         <div class="stat-label">我的收藏</div>
       </div>
       <div class="stat-item" @click="fetchHistoryData">
 
         <div class="stat-icon">🕒</div>
-        <div class="stat-number">{{ historyCount }}</div>
+
         <div class="stat-label">浏览记录</div>
       </div>
       <div class="stat-item" @click="showPreferences = true">
         <div class="stat-icon">⭐</div>
-        <div class="stat-number">{{ preferencesCount }}</div>
+
         <div class="stat-label">偏好设置</div>
       </div>
     </div>
@@ -63,29 +63,35 @@
         <div class="list-item" @click="showSettings = true">
           <div class="item-icon">⚙️</div>
           <div class="item-text">
-            <div class="item-title">应用设置</div>
+            <div class="item-title">作者信息</div>
             <div class="item-desc">通知、主题等设置</div>
           </div>
           <div class="item-arrow">›</div>
         </div>
       </div>
 
-      <div class="list-section">
-        <div class="list-item" @click="handleLogout" v-if="authStore.isLoggedIn || isLoggedIn">          <div class="item-icon logout">🚪</div>
-          <div class="item-text">
-            <div class="item-title">退出登录</div>
-          </div>
-        </div>
+     <div class="list-section">
+  <!-- 修改：使用三重检查确保登录状态正确 -->
+  <div
+    class="list-item"
+    @click="handleLogout"
+    v-if="isLoggedIn || authStore.isLoggedIn || hasLocalStorageToken()"
+  >
+    <div class="item-icon logout">🚪</div>
+    <div class="item-text">
+      <div class="item-title">退出登录</div>
+    </div>
+  </div>
 
-        <div class="list-item" @click="$router.push('/login')" v-else>
-          <div class="item-icon">🔑</div>
-          <div class="item-text">
-            <div class="item-title">登录/注册</div>
-            <div class="item-desc">立即登录体验更多功能</div>
-          </div>
-          <div class="item-arrow">›</div>
-        </div>
-      </div>
+  <div class="list-item" @click="$router.push('/login')" v-else>
+    <div class="item-icon">🔑</div>
+    <div class="item-text">
+      <div class="item-title">登录/注册</div>
+      <div class="item-desc">立即登录体验更多功能</div>
+    </div>
+    <div class="item-arrow">›</div>
+  </div>
+</div>
     </div>
 
     <!-- 底部导航 -->
@@ -267,7 +273,61 @@
         </div>
       </div>
     </div>
+<!-- 帮助中心弹窗 -->
+<div v-if="showHelpModal" class="modal-overlay" @click="showHelpModal = false">
+  <div class="modal-content help-modal" @click.stop>
+    <div class="modal-header">
+      <h3 class="modal-title">帮助中心</h3>
+      <button class="close-btn" @click="showHelpModal = false">×</button>
+    </div>
+    <div class="modal-body help-body">
+      <div class="help-section">
+        <h4 class="help-section-title">📖 使用指南</h4>
+        <ul class="help-list">
+          <li><strong>个人资料管理：</strong>还没有实现，你注册是啥名字以后就得是啥名字</li>
+          <li><strong>偏好设置：</strong>点击"偏好设置"可设置预算、房源类型、城市等筛选条件</li>
+          <li><strong>收藏功能：</strong>在房源详情页点击爱心图标即可收藏房源</li>
+          <li><strong>浏览记录：</strong>系统会自动记录您浏览过的房源</li>
+        </ul>
+      </div>
 
+      <div class="help-section">
+        <h4 class="help-section-title">❓ 常见问题</h4>
+        <div class="faq-item">
+          <div class="faq-question">Q: 如何搜索特定区域的房源？</div>
+          <div class="faq-answer">A: 在偏好设置中选择城市和区域，系统会根据您的偏好推荐房源</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-question">Q: 为什么看不到浏览记录？</div>
+          <div class="faq-answer">A: 请确保您已登录账号，浏览记录会同步到您的账户中</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-question">Q: 如何清空收藏列表？</div>
+          <div class="faq-answer">A: 目前需要逐个取消收藏，后续会添加批量删除功能</div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-question">Q: 预算范围如何设置？</div>
+          <div class="faq-answer">A: 在偏好设置中输入最低和最高预算（单位：万元），如：100-300</div>
+        </div>
+      </div>
+
+      <div class="help-section">
+        <h4 class="help-section-title">📞 联系我们</h4>
+        <div class="contact-info">
+          <p><strong>客服热线：</strong>400-123-4567</p>
+          <p><strong>服务时间：</strong>周一至周五 9:00-18:00</p>
+          <p><strong>邮箱：</strong>support@example.com</p>
+          <p><strong>微信公众号：</strong>房产助手</p>
+        </div>
+      </div>
+
+      <div class="help-footer">
+        <p class="version-info">当前版本：v1.0.0</p>
+        <p class="copyright">© 2025 房产助手 版权所有</p>
+      </div>
+    </div>
+  </div>
+</div>
     <!-- 浏览记录弹窗 -->
     <div v-if="showHistory" class="modal-overlay" @click="showHistory = false">
       <div class="modal-content" @click.stop>
@@ -324,7 +384,17 @@ interface HistoryItem {
   image: string
   time: string
 }
-
+// 新增：检查 localStorage 中是否有 token
+const hasLocalStorageToken = (): boolean => {
+  try {
+    const token = localStorage.getItem('token')
+    const userInfo = localStorage.getItem('userInfo')
+    return !!(token && userInfo)
+  } catch (err) {
+    console.error('检查 localStorage 失败:', err)
+    return false
+  }
+}
 // 房源类型选项 - 与 LoginPage.vue 的 select 选项对应
 const houseTypeOptions = [
   { value: 'apartment', label: '公寓', icon: '🏢' },
@@ -334,6 +404,9 @@ const houseTypeOptions = [
 ]
 const router = useRouter()
 const authStore = useAuthStore()  // 新增：使用 auth store
+const showHelpModal = ref(false)
+
+
 
 // 使用计算属性获取当前用户ID
 const currentUserId = computed(() => {
@@ -395,7 +468,7 @@ const fetchUserInfo = async () => {
 
         // 更新用户信息
         userInfo.username = profile.username
-        userInfo.bio = `专注找房 · 已浏览${profile.stats.browsed}套房源`
+        userInfo.bio = ``
 
         // 更新统计数据
         favoritesCount.value = profile.stats.favorites
@@ -619,10 +692,10 @@ watch(
 // 用户信息
 const userInfo = reactive({
   username: '房产达人',
-  phone: '138****8888',
+  phone: '',
   bio: '专注于寻找理想的家',
-  location: '北京市',
-  avatar: 'https://img95.699pic.com/photo/50149/6896.jpg_wh860.jpg',
+  location: '',
+  avatar: '../../assets/image/zhz.png',
 })
 
 // 状态数据
@@ -886,12 +959,10 @@ const editAvatar = () => {
   alert('头像编辑功能')
 }
 
-const editProfile = () => {
-  alert('编辑资料功能')
-}
+
 
 const showHelp = () => {
-  alert('帮助中心')
+  showHelpModal.value = true
 }
 
 const removeFavorite = async (favoriteId: number) => {
@@ -1601,5 +1672,138 @@ input:checked + .slider:before {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   font-size: 14px;
+}
+/* 帮助中心弹窗样式 */
+.help-modal {
+  max-width: 600px;
+  max-height: 85vh;
+}
+
+.help-body {
+  padding: 0 20px 20px;
+}
+
+.help-section {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.help-section:last-child {
+  border-bottom: none;
+}
+
+.help-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #007bff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-list {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.help-list li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+}
+
+.help-list li:last-child {
+  margin-bottom: 0;
+}
+
+.help-list li strong {
+  color: #333;
+}
+
+.faq-item {
+  margin-bottom: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  transition: background-color 0.2s;
+}
+
+.faq-item:hover {
+  background: #f0f7ff;
+}
+
+.faq-question {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.faq-answer {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.contact-info {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.contact-info p {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.contact-info p:last-child {
+  margin-bottom: 0;
+}
+
+.contact-info strong {
+  color: #333;
+  min-width: 80px;
+  display: inline-block;
+}
+
+.help-footer {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.version-info {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.copyright {
+  font-size: 12px;
+  color: #999;
+}
+
+/* 滚动条样式 */
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 </style>

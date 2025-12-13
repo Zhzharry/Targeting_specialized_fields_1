@@ -92,11 +92,11 @@ export function createUserStore(context: RootStoreContext) {
         // 降级处理
         Object.assign(userProfile, {
           bio: '专注于寻找理想的家',
-          phone: '138****8888',
-          location: '北京市',
-          avatar: 'https://img95.699pic.com/photo/50149/6896.jpg_wh860.jpg',
-          joinedAt: '2024-01-01',
-          stats: { favorites: 12, browsed: 48, recommendations: 6 }
+          phone: '未知',
+          location: '未知',
+          avatar: '../../assets/image/zhz.png',
+          joinedAt: '',
+          stats: { favorites: 0, browsed: 0 }
         })
       } finally {
         loading.value = false

@@ -17,15 +17,30 @@
           v-model="searchQuery"
           type="text"
           placeholder="输入小区名、区域或关键词..."
-          @input="handleSearchInput"
           @focus="showSuggestions = true"
           @blur="onSearchBlur"
+          @keydown.enter="performSearch"
         />
         <button @click="performSearch" class="search-btn">搜索</button>
       </div>
 
       <!-- 搜索建议和搜索历史 -->
       <div v-if="showSuggestions" class="suggestions">
+        <!-- 热门搜索 -->
+        <div class="hot-search-section">
+          <div class="section-title">热门搜索</div>
+          <div class="hot-search-tags">
+            <span
+              v-for="word in hotSearchWords"
+              :key="word"
+              class="hot-search-tag"
+              @click="selectHotSearch(word)"
+            >
+              🔥 {{ word }}
+            </span>
+          </div>
+        </div>
+
         <!-- 搜索历史 -->
         <div v-if="searchHistory.length > 0" class="history-section">
           <div class="section-title">搜索历史</div>
@@ -35,24 +50,17 @@
             class="suggestion-item history-item"
             @click="searchFromHistory(item)"
           >
-            🕒 {{ item.keyword }}
+            <div class="history-content">
+              <span class="history-keyword">🕒 {{ item.keyword }}</span>
+              <span class="history-meta">
+                <span class="search-count" v-if="item.count > 1">{{ item.count }}次</span>
+                <span class="search-time">{{ item.time }}</span>
+              </span>
+            </div>
             <span class="delete-history" @click.stop="deleteHistory(item)">×</span>
           </div>
           <div v-if="searchHistory.length > 0" class="clear-history" @click="clearAllHistory">
             清空搜索历史
-          </div>
-        </div>
-
-        <!-- 搜索建议 -->
-        <div v-if="searchSuggestions.length > 0" class="suggestion-section">
-          <div class="section-title">搜索建议</div>
-          <div
-            v-for="suggestion in searchSuggestions"
-            :key="suggestion"
-            class="suggestion-item"
-            @click="selectSuggestion(suggestion)"
-          >
-            🔍 {{ suggestion }}
           </div>
         </div>
       </div>
@@ -115,25 +123,28 @@
           <div class="property-list">
             <div
               v-for="property in searchResults"
-              :key="property.id"
+              :key="property.propertyId"
               class="property-card"
-              @click="viewProperty(property.id)"
+              @click="viewProperty(property.propertyId)"
             >
-              <img :src="property.image" :alt="property.title" class="property-image" />
+              <img :src="getPropertyImage(property)" :alt="property.title" class="property-image" />
               <div class="property-info">
                 <h3 class="property-title">{{ property.title }}</h3>
-                <p class="property-location">{{ property.community }}</p>
+                <p class="property-location">{{ property.communityName }}</p>
                 <div class="property-meta">
-                  <span>{{ property.bedrooms }}室{{ property.livingRooms }}厅</span>
-                  <span>{{ property.area }}㎡</span>
-                  <span>{{ property.floor }}</span>
+                  <span>{{ property.layoutInfo.bedroom_count }}室{{ property.layoutInfo.living_room_count }}厅{{ property.layoutInfo.bathroom_count }}卫</span>
+                  <span>{{ property.layoutInfo.area }}㎡</span>
+                  <span>{{ property.locationInfo.district }}</span>
                 </div>
                 <div class="property-price">
-                  <span class="price">¥{{ property.price }}</span>
-                  <span class="unit">/月</span>
+                  <span class="price">¥{{ property.priceInfo.total_price }}</span>
+                  <span class="unit">万</span>
+                  <span class="unit-price">({{ Math.round(property.priceInfo.unit_price / 10000) }}万/㎡)</span>
                 </div>
                 <div class="property-tags">
-                  <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
+                  <span class="tag">{{ property.basicInfo.property_type === 'apartment' ? '公寓' : '住宅' }}</span>
+                  <span class="tag">{{ property.status === 'for_sale' ? '在售' : '已售' }}</span>
+                  <span v-if="property.viewCount > 20" class="tag">热门</span>
                 </div>
               </div>
             </div>
@@ -149,26 +160,22 @@
             <button @click="refreshDiscover" class="refresh-btn">🔄 换一换</button>
           </div>
           <div class="discover-hint">
-            <p>摇一摇手机或点击换一换发现更多惊喜房源</p>
+            <p>点击换一换发现更多惊喜房源</p>
           </div>
           <div class="property-list">
             <div
               v-for="property in discoverProperties"
-              :key="property.id"
+              :key="property.propertyId"
               class="property-card"
-              @click="viewProperty(property.id)"
+              @click="viewProperty(property.propertyId)"
             >
-              <img :src="property.image" :alt="property.title" class="property-image" />
+              <img :src="property.cover" :alt="property.title" class="property-image" />
               <div class="property-info">
                 <h3 class="property-title">{{ property.title }}</h3>
-                <p class="property-location">{{ property.community }}</p>
-                <div class="property-meta">
-                  <span>{{ property.bedrooms }}室{{ property.livingRooms }}厅</span>
-                  <span>{{ property.area }}㎡</span>
-                </div>
+                <p class="property-location">{{ property.summary }}</p>
                 <div class="property-price">
-                  <span class="price">¥{{ property.price }}</span>
-                  <span class="unit">/月</span>
+                  <span class="price">¥{{ property.totalPrice }}</span>
+                  <span class="unit">万</span>
                 </div>
                 <div class="property-tags">
                   <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
@@ -186,24 +193,26 @@
           <div class="property-list">
             <div
               v-for="property in hotProperties"
-              :key="property.id"
+              :key="property.propertyId"
               class="property-card"
-              @click="viewProperty(property.id)"
+              @click="viewProperty(property.propertyId)"
             >
-              <img :src="property.image" :alt="property.title" class="property-image" />
+              <img :src="getPropertyImage(property)" :alt="property.title" class="property-image" />
               <div class="property-info">
                 <h3 class="property-title">{{ property.title }}</h3>
-                <p class="property-location">{{ property.community }}</p>
+                <p class="property-location">{{ property.communityName }}</p>
                 <div class="property-meta">
-                  <span>{{ property.bedrooms }}室{{ property.livingRooms }}厅</span>
-                  <span>{{ property.area }}㎡</span>
+                  <span>{{ property.layoutInfo.bedroom_count }}室{{ property.layoutInfo.living_room_count }}厅</span>
+                  <span>{{ property.layoutInfo.area }}㎡</span>
                 </div>
                 <div class="property-price">
-                  <span class="price">¥{{ property.price }}</span>
-                  <span class="unit">/月</span>
+                  <span class="price">¥{{ property.priceInfo.total_price }}</span>
+                  <span class="unit">万</span>
                 </div>
                 <div class="property-tags">
-                  <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
+                  <span class="tag">{{ property.basicInfo.property_type === 'apartment' ? '公寓' : '住宅' }}</span>
+                  <span class="tag">热门</span>
+                  <span class="tag">浏览{{ property.viewCount }}次</span>
                 </div>
               </div>
             </div>
@@ -231,8 +240,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { queryAPI } from '@/api/query.api'
+import type { PropertyDetail, PropertyCard } from '@/types/api.types'
 
 const route = useRoute()
 
@@ -240,15 +251,32 @@ const route = useRoute()
 const searchQuery = ref('')
 const showSuggestions = ref(false)
 const loading = ref(false)
-const activeTab = ref('search')
+const activeTab = ref('recommend')
 const activeFilter = ref('all')
 const fromHistory = ref(false)
 
-// 搜索建议
-const searchSuggestions = ref<string[]>([])
+// 搜索历史项类型定义
+interface SearchHistoryItem {
+  id: number
+  keyword: string
+  time: string
+  count: number
+  lastSearch: string
+}
 
-// 搜索历史
-const searchHistory = ref<Array<{id: number, keyword: string, time: string}>>([])
+// 搜索历史 - 优化结构，添加频率统计
+const searchHistory = ref<Array<SearchHistoryItem>>([])
+
+// 热门搜索词
+const hotSearchWords = ref<string[]>([
+  '万科城市花园',
+  '华润城',
+  '南山区',
+  '福田区',
+  '三房',
+  '地铁房',
+  '学区房'
+])
 
 // 快速筛选
 const quickFilters = ref([
@@ -259,75 +287,132 @@ const quickFilters = ref([
   { value: 'hot', label: '热门' },
 ])
 
-// 模拟数据
-interface Property {
-  id: number
-  title: string
-  community: string
-  bedrooms: number
-  livingRooms: number
-  area: number
-  price: number
-  image: string
-  tags: string[]
-  floor?: string
+// 搜索结果 - 使用真实的API数据结构
+const searchResults = ref<PropertyDetail[]>([])
+const discoverProperties = ref<PropertyCard[]>([])
+const hotProperties = ref<PropertyDetail[]>([])
+
+// 辅助函数：根据筛选条件生成API参数
+const getFilterParams = (filter: string): Partial<{
+  minArea: number
+  maxArea: number
+  maxPrice: number
+  minViewCount: number
+}> => {
+  const params: Partial<{
+    minArea: number
+    maxArea: number
+    maxPrice: number
+    minViewCount: number
+  }> = {}
+
+  switch (filter) {
+    case 'nearby':
+      // 附近房源 - 可以根据用户位置设置距离参数
+      params.minArea = 50
+      params.maxArea = 150
+      break
+    case 'cheap':
+      // 低价房源
+      params.maxPrice = 500
+      break
+    case 'new':
+      // 最新房源 - 按更新时间排序（后端需要支持）
+      break
+    case 'hot':
+      // 热门房源 - 按浏览次数排序（后端需要支持）
+      params.minViewCount = 10
+      break
+  }
+
+  return params
 }
 
-const searchResults = ref<Property[]>([])
-const discoverProperties = ref<Property[]>([])
-const hotProperties = ref<Property[]>([])
+// 模拟猜你喜欢数据（PropertyCard格式）
+const getMockDiscoverProperties = (): PropertyCard[] => {
+  return [
+    {
+      propertyId: 1,
+      title: '精装修两居室 南向采光好',
+      summary: '阳光小区 · 85㎡ · 2室1厅1卫',
+      totalPrice: 450,
+      cover: 'https://picsum.photos/seed/1/300/200',
+      detailUrl: 'https://example.com/property/1',
+      tags: ['近地铁', '精装修']
+    },
+    {
+      propertyId: 2,
+      title: '豪华三居室 电梯房 学区房',
+      summary: '花园社区 · 120㎡ · 3室2厅2卫',
+      totalPrice: 680,
+      cover: 'https://picsum.photos/seed/2/300/200',
+      detailUrl: 'https://example.com/property/2',
+      tags: ['学区房', '电梯房']
+    }
+  ]
+}
 
-// 模拟房源数据
-const mockProperties: Property[] = [
-  {
-    id: 1,
-    title: '精装修两居室',
-    community: '阳光小区',
-    bedrooms: 2,
-    livingRooms: 1,
-    area: 85,
-    price: 4500,
-    image: 'https://img95.699pic.com/photo/50149/6896.jpg_wh860.jpg',
-    tags: ['近地铁', '精装修'],
-    floor: '中层/18层',
-  },
-  {
-    id: 2,
-    title: '豪华三居室',
-    community: '花园社区',
-    bedrooms: 3,
-    livingRooms: 2,
-    area: 120,
-    price: 6800,
-    image: 'https://img95.699pic.com/photo/50149/6896.jpg_wh860.jpg',
-    tags: ['学区房', '电梯房'],
-    floor: '高层/24层',
-  },
-  {
-    id: 3,
-    title: '温馨一居室',
-    community: '幸福家园',
-    bedrooms: 1,
-    livingRooms: 1,
-    area: 60,
-    price: 3200,
-    image: 'https://img95.699pic.com/photo/50149/6896.jpg_wh860.jpg',
-    tags: ['拎包入住', '朝南'],
-    floor: '低层/6层',
-  },
-  {
-    id: 4,
-    title: '现代LOFT公寓',
-    community: '创意园区',
-    bedrooms: 1,
-    livingRooms: 1,
-    area: 45,
-    price: 3800,
-    image: 'https://img95.699pic.com/photo/50149/6896.jpg_wh860.jpg',
-    tags: ['LOFT', '创意空间'],
-    floor: '中层/12层',
-  },
-]
+// 模拟搜索结果（API调用失败时的fallback）
+const getMockSearchResults = (): PropertyDetail[] => {
+  return [
+    {
+      propertyId: 1,
+      title: '精装修两居室 南向采光好',
+      status: 'for_sale',
+      communityName: '阳光小区',
+      viewCount: 35,
+      favoriteCount: 8,
+      updatedAt: '2025-01-15T10:30:00Z',
+      priceInfo: {
+        total_price: 450,
+        unit_price: 52941
+      },
+      layoutInfo: {
+        bedroom_count: 2,
+        living_room_count: 1,
+        bathroom_count: 1,
+        area: 85
+      },
+      basicInfo: {
+        property_type: 'apartment',
+        build_year: 2018
+      },
+      locationInfo: {
+        province: '广东省',
+        city: '深圳市',
+        district: '南山区'
+      }
+    },
+    {
+      propertyId: 2,
+      title: '豪华三居室 电梯房 学区房',
+      status: 'for_sale',
+      communityName: '花园社区',
+      viewCount: 42,
+      favoriteCount: 12,
+      updatedAt: '2025-01-14T15:20:00Z',
+      priceInfo: {
+        total_price: 680,
+        unit_price: 56667
+      },
+      layoutInfo: {
+        bedroom_count: 3,
+        living_room_count: 2,
+        bathroom_count: 2,
+        area: 120
+      },
+      basicInfo: {
+        property_type: 'apartment',
+        build_year: 2020
+      },
+      locationInfo: {
+        province: '广东省',
+        city: '深圳市',
+        district: '福田区'
+      }
+    }
+  ]
+}
 
 // 监听路由参数变化
 watch(() => route.query, (newQuery) => {
@@ -348,18 +433,6 @@ watch(() => route.query, (newQuery) => {
 }, { immediate: true })
 
 // 方法
-const handleSearchInput = () => {
-  if (searchQuery.value.length > 1) {
-    searchSuggestions.value = [
-      `${searchQuery.value}小区`,
-      `${searchQuery.value}家园`,
-      `${searchQuery.value}公寓`,
-      `${searchQuery.value}社区`,
-    ]
-  } else {
-    searchSuggestions.value = []
-  }
-}
 
 const onSearchBlur = () => {
   // 延迟隐藏，给点击历史记录的时间
@@ -368,8 +441,8 @@ const onSearchBlur = () => {
   }, 200)
 }
 
-const selectSuggestion = (suggestion: string) => {
-  searchQuery.value = suggestion
+const selectHotSearch = (word: string) => {
+  searchQuery.value = word
   showSuggestions.value = false
   fromHistory.value = false
   performSearch()
@@ -385,19 +458,23 @@ const performSearch = async () => {
     addToSearchHistory(searchQuery.value)
   }
 
-  // 模拟搜索API调用
-  setTimeout(() => {
-    if (searchQuery.value.trim()) {
-      const keyword = searchQuery.value.trim().toLowerCase()
-      searchResults.value = mockProperties.filter(
-        (property) =>
-          property.community.toLowerCase().includes(keyword) ||
-          property.title.toLowerCase().includes(keyword) ||
-          property.tags.some(tag => tag.toLowerCase().includes(keyword))
-      )
-    } else {
-      searchResults.value = [...mockProperties]
+  try {
+    // 调用真实的房源查询API
+    const params = {
+      keyword: searchQuery.value.trim() || undefined,
+      // 可以根据activeFilter添加更多筛选条件
+      ...(activeFilter.value !== 'all' && getFilterParams(activeFilter.value))
     }
+
+    const response = await queryAPI.searchProperties(params)
+    searchResults.value = response.items
+
+    console.log('搜索结果:', response)
+  } catch (error) {
+    console.error('搜索失败:', error)
+    // 如果API调用失败，使用模拟数据作为fallback
+    searchResults.value = getMockSearchResults()
+  } finally {
     loading.value = false
 
     // 重置历史记录标记
@@ -405,7 +482,7 @@ const performSearch = async () => {
 
     // 确保显示搜索结果标签页
     activeTab.value = 'search'
-  }, 500)
+  }
 }
 
 const setActiveFilter = (filter: string) => {
@@ -413,20 +490,29 @@ const setActiveFilter = (filter: string) => {
   performSearch()
 }
 
-const refreshDiscover = () => {
-  // 随机打乱显示猜你喜欢
-  discoverProperties.value = [...mockProperties].sort(() => Math.random() - 0.5).slice(0, 2)
+const refreshDiscover = async () => {
+  try {
+    // 调用猜你喜欢API
+    const response = await queryAPI.getGuessYouLike()
+    // 随机选择2个房源
+    discoverProperties.value = response.items.sort(() => Math.random() - 0.5).slice(0, 2)
+  } catch (error) {
+    console.error('获取猜你喜欢失败:', error)
+    // fallback到模拟数据
+    discoverProperties.value = getMockDiscoverProperties()
+  }
 }
 
 const resetSearch = () => {
   searchQuery.value = ''
   searchResults.value = []
-  activeTab.value = 'search'
   fromHistory.value = false
 }
 
 const viewProperty = (propertyId: number) => {
+  // 跳转到房源详情页（暂时用alert，后续可以跳转到详情页面）
   alert(`查看房源详情: ${propertyId}`)
+  // 后续可以实现: router.push(`/property/${propertyId}`)
 }
 
 // 搜索历史相关方法
@@ -435,15 +521,25 @@ const loadSearchHistory = () => {
   const savedHistory = localStorage.getItem('searchHistory')
   if (savedHistory) {
     try {
-      const parsed: Array<{id: number, keyword: string, time: string}> = JSON.parse(savedHistory)
-      // 过滤确保数据结构正确
-      searchHistory.value = parsed.filter(item =>
-        item &&
-        typeof item === 'object' &&
-        'id' in item &&
-        'keyword' in item &&
-        'time' in item
-      )
+      const parsed: Array<Partial<SearchHistoryItem>> = JSON.parse(savedHistory)
+      // 过滤确保数据结构正确，并迁移旧数据
+      searchHistory.value = parsed
+        .filter((item): item is Partial<SearchHistoryItem> & { keyword: string } =>
+          item && typeof item === 'object' && 'keyword' in item && typeof item.keyword === 'string')
+        .map(item => ({
+          id: item.id || Date.now(),
+          keyword: item.keyword,
+          time: item.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          count: item.count || 1,
+          lastSearch: item.lastSearch || item.time || new Date().toISOString()
+        }))
+        .sort((a, b) => {
+          // 优先按搜索频率排序，相同频率按时间倒序
+          if (a.count !== b.count) {
+            return b.count - a.count
+          }
+          return new Date(b.lastSearch).getTime() - new Date(a.lastSearch).getTime()
+        })
     } catch (error) {
       console.error('加载搜索历史失败:', error)
       searchHistory.value = []
@@ -457,27 +553,41 @@ const addToSearchHistory = (keyword: string) => {
   }
 
   const trimmedKeyword = keyword.trim()
+  const now = new Date().toISOString()
+
   // 创建新数组操作
   const newHistory = [...searchHistory.value]
   const existingIndex = newHistory.findIndex(item => item.keyword === trimmedKeyword)
 
   if (existingIndex !== -1) {
-    // 如果已存在，先移除
-    newHistory.splice(existingIndex, 1)
+    // 如果已存在，增加计数并更新时间
+    newHistory[existingIndex]!.count += 1
+    newHistory[existingIndex]!.lastSearch = now
+    newHistory[existingIndex]!.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  } else {
+    // 添加新的搜索历史
+    const newItem = {
+      id: Date.now(),
+      keyword: trimmedKeyword,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      count: 1,
+      lastSearch: now
+    }
+    newHistory.unshift(newItem)
   }
-
-  // 添加新的搜索历史到开头
-  const newItem = {
-    id: Date.now(),
-    keyword: trimmedKeyword,
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-  newHistory.unshift(newItem)
 
   // 限制历史记录数量
-  if (newHistory.length > 10) {
+  if (newHistory.length > 15) {
     newHistory.pop()
   }
+
+  // 重新排序：优先按搜索频率，相同频率按时间倒序
+  newHistory.sort((a, b) => {
+    if (a.count !== b.count) {
+      return b.count - a.count
+    }
+    return new Date(b.lastSearch).getTime() - new Date(a.lastSearch).getTime()
+  })
 
   // 更新数组
   searchHistory.value = newHistory
@@ -486,20 +596,35 @@ const addToSearchHistory = (keyword: string) => {
   localStorage.setItem('searchHistory', JSON.stringify(newHistory))
 }
 
-const searchFromHistory = (item: {id: number, keyword: string, time: string}) => {
+const searchFromHistory = (item: SearchHistoryItem) => {
   if (!item) return
 
   searchQuery.value = item.keyword
   showSuggestions.value = false
   fromHistory.value = true
 
-  // 添加日志，调试用
+  // 增加搜索计数
+  item.count += 1
+  item.lastSearch = new Date().toISOString()
+  item.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  // 重新排序
+  searchHistory.value.sort((a, b) => {
+    if (a.count !== b.count) {
+      return b.count - a.count
+    }
+    return new Date(b.lastSearch).getTime() - new Date(a.lastSearch).getTime()
+  })
+
+  // 保存更新
+  localStorage.setItem('searchHistory', JSON.stringify(searchHistory.value))
+
   console.log('从历史记录搜索:', item.keyword)
 
   performSearch()
 }
 
-const deleteHistory = (item: {id: number, keyword: string, time: string}) => {
+const deleteHistory = (item: SearchHistoryItem) => {
   // 安全处理
   if (!item) return
 
@@ -512,25 +637,26 @@ const clearAllHistory = () => {
   localStorage.removeItem('searchHistory')
 }
 
-// 摇一摇功能
-let lastShakeTime = 0
-const handleDeviceMotion = (event: DeviceMotionEvent) => {
-  const acceleration = event.accelerationIncludingGravity
-  if (!acceleration) return
-
-  const shakeThreshold = 15
-  const currentTime = Date.now()
-
-  if (currentTime - lastShakeTime > 1000) {
-    const totalForce =
-      Math.abs(acceleration.x!) + Math.abs(acceleration.y!) + Math.abs(acceleration.z!)
-
-    if (totalForce > shakeThreshold) {
-      lastShakeTime = currentTime
-      activeTab.value = 'recommend'
-      refreshDiscover()
-    }
+// 加载热门推荐
+const loadHotProperties = async () => {
+  try {
+    // 查询热门房源（浏览次数多的）
+    const response = await queryAPI.searchProperties({
+      minViewCount: 10,
+      status: 'for_sale'
+    })
+    hotProperties.value = response.items.slice(0, 4) // 取前4个
+  } catch (error) {
+    console.error('获取热门推荐失败:', error)
+    // fallback到模拟数据
+    hotProperties.value = getMockSearchResults()
   }
+}
+
+// 获取房源图片
+const getPropertyImage = (property: PropertyDetail) => {
+  // 使用picsum.photos根据propertyId生成稳定图片
+  return `https://picsum.photos/seed/${property.propertyId}/300/200`
 }
 
 // 初始化
@@ -538,20 +664,11 @@ onMounted(() => {
   // 加载搜索历史
   loadSearchHistory()
 
-  // 初始加载热门推荐
-  hotProperties.value = [...mockProperties]
-  discoverProperties.value = [...mockProperties].slice(0, 2)
+  // 初始加载热门推荐（浏览次数多的房源）
+  loadHotProperties()
 
-  // 监听摇一摇
-  if (window.DeviceMotionEvent) {
-    window.addEventListener('devicemotion', handleDeviceMotion)
-  }
-})
-
-onUnmounted(() => {
-  if (window.DeviceMotionEvent) {
-    window.removeEventListener('devicemotion', handleDeviceMotion)
-  }
+  // 初始加载猜你喜欢
+  refreshDiscover()
 })
 </script>
 
@@ -637,12 +754,12 @@ onUnmounted(() => {
 }
 
 .history-section,
-.suggestion-section {
+.hot-search-section {
   border-bottom: 1px solid #f0f0f0;
 }
 
 .history-section:last-child,
-.suggestion-section:last-child {
+.hot-search-section:last-child {
   border-bottom: none;
 }
 
@@ -671,6 +788,34 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.history-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.history-keyword {
+  font-size: 14px;
+  color: #333;
+}
+
+.history-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: #999;
+}
+
+.search-count {
+  color: #007bff;
+  font-weight: 500;
+}
+
+.search-time {
+  color: #666;
+}
+
 .delete-history {
   color: #ccc;
   cursor: pointer;
@@ -694,6 +839,35 @@ onUnmounted(() => {
 
 .clear-history:hover {
   background: #f8f9fa;
+}
+
+/* 热门搜索样式 */
+.hot-search-section {
+  padding: 8px 16px;
+}
+
+.hot-search-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hot-search-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #ff6b6b, #ffa500);
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.hot-search-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3);
 }
 
 .quick-filters {
