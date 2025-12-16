@@ -152,39 +152,39 @@
         </div>
       </div>
 
-   <!-- 猜你喜欢 -->
-<div v-if="activeTab === 'recommend'" class="tab-content">
-  <div class="discover-section">
-    <div class="section-header">
-      <h3>猜你喜欢</h3>
-      <button @click="refreshDiscover" class="refresh-btn">🔄 换一换</button>
-    </div>
-    <div class="discover-hint">
-      <p>点击换一换发现更多惊喜房源</p>
-    </div>
-    <div class="property-list">
-      <div
-        v-for="property in discoverProperties"
-        :key="property.propertyId"
-        class="property-card"
-        @click="viewProperty(property.propertyId)"
-      >
-        <img :src="property.cover" :alt="property.title" class="property-image" />
-        <div class="property-info">
-          <h3 class="property-title">{{ property.title }}</h3>
-          <p class="property-location">{{ property.summary }}</p>
-          <div class="property-price">
-            <span class="price">¥{{ property.totalPrice }}</span>
-            <span class="unit">万</span>
+      <!-- 猜你喜欢 -->
+      <div v-if="activeTab === 'recommend'" class="tab-content">
+        <div class="discover-section">
+          <div class="section-header">
+            <h3>猜你喜欢</h3>
+            <button @click="refreshDiscover" class="refresh-btn">🔄 换一换</button>
           </div>
-          <div class="property-tags">
-            <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
+          <div class="discover-hint">
+            <p>点击换一换发现更多惊喜房源</p>
+          </div>
+              <div class="property-list">
+            <div
+              v-for="property in discoverProperties"
+              :key="property.propertyId"
+              class="property-card"
+              @click="viewDiscoverProperty(property)"
+            >
+              <img :src="property.cover" :alt="property.title" class="property-image" />
+              <div class="property-info">
+                <h3 class="property-title">{{ property.title }}</h3>
+                <p class="property-location">{{ property.summary }}</p>
+                <div class="property-price">
+                  <span class="price">¥{{ property.totalPrice }}</span>
+                  <span class="unit">万</span>
+                </div>
+                <div class="property-tags">
+                  <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
-</div>
 
       <!-- 热门推荐 -->
       <div v-if="activeTab === 'hot'" class="tab-content">
@@ -249,15 +249,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { useRoute, } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { queryAPI } from '@/api/query.api'
 import PropertyDetailModal from '@/components/Common/PropertyDetailModal.vue'
 import type { PropertyDetail, PropertyCard } from '@/types/api.types'
-import { useAuthStore } from '@/stores/auth.store'  // 添加导入
 
 const route = useRoute()
-
-const authStore = useAuthStore()  // 使用 authStore 获取当前用户信息
 
 // 搜索状态
 const searchQuery = ref('')
@@ -525,113 +522,70 @@ const resetSearch = () => {
   fromHistory.value = false
 }
 
-const viewProperty = (propertyId: number | string) => {
-  // 确保 propertyId 是数字类型
-  const id = typeof propertyId === 'string' ? parseInt(propertyId, 10) : propertyId;
-
-  console.log('尝试查找房源 ID:', id);
-  console.log('搜索结果数量:', searchResults.value.length);
-  console.log('猜你喜欢数量:', discoverProperties.value.length);
-  console.log('热门房源数量:', hotProperties.value.length);
-
-  // 从搜索结果中查找（PropertyDetail 类型）
-  let property = searchResults.value.find(p =>
-    (typeof p.propertyId === 'string' ? parseInt(p.propertyId, 10) : p.propertyId) === id
-  );
-
-  // 如果没找到，再尝试在热门房源中查找（PropertyDetail 类型）
-  if (!property) {
-    property = hotProperties.value.find(p =>
-      (typeof p.propertyId === 'string' ? parseInt(p.propertyId, 10) : p.propertyId) === id
-    );
-  }
-
-  // 如果仍然没找到，尝试在猜你喜欢中查找（PropertyCard 类型）
-  let propertyCard: PropertyCard | undefined;
-  if (!property) {
-    propertyCard = discoverProperties.value.find(p =>
-      (typeof p.propertyId === 'string' ? parseInt(p.propertyId, 10) : p.propertyId) === id
-    );
-  }
+const viewProperty = (propertyId: number) => {
+  // 查找房源详情（从搜索结果或热门推荐中查找）
+  const property = searchResults.value.find(p => p.propertyId === propertyId) ||
+                   hotProperties.value.find(p => p.propertyId === propertyId)
 
   if (property) {
-    console.log('找到完整房源信息:', property);
-    selectedProperty.value = property;
-    showPropertyModal.value = true;
-  } else if (propertyCard) {
-    console.log('找到卡片信息:', propertyCard);
-    // 将 PropertyCard 转换为 PropertyDetail
-    const convertedProperty: PropertyDetail = {
-      propertyId: propertyCard.propertyId,
-      title: propertyCard.title,
-      status: 'for_sale',
-      communityName: propertyCard.summary.split('·')[0]?.trim() || '未知小区',
-      viewCount: 0,
-      favoriteCount: 0,
-      updatedAt: new Date().toISOString(),
-      priceInfo: {
-        total_price: propertyCard.totalPrice,
-        unit_price: propertyCard.totalPrice * 10000 / 100 // 默认每平米100元，仅作占位
-      },
-      layoutInfo: {
-        bedroom_count: 0,
-        living_room_count: 0,
-        bathroom_count: 0,
-        area: 100 // 默认100平米
-      },
-      basicInfo: {
-        property_type: 'apartment',
-        build_year: new Date().getFullYear()
-      },
-      locationInfo: {
-        province: '未知',
-        city: '未知',
-        district: '未知'
-      }
-    };
-
-    selectedProperty.value = convertedProperty;
-    showPropertyModal.value = true;
+    selectedProperty.value = property
+    showPropertyModal.value = true
   } else {
-    console.log('房源信息未找到，请求的ID:', id);
-    alert('房源信息未找到');
+    alert('房源信息未找到')
   }
 }
 
-// 处理收藏
-// 处理收藏
-// 处理收藏
-// 处理收藏
+// 处理猜你喜欢卡片点击（PropertyCard -> PropertyDetail）
+const viewDiscoverProperty = (card: PropertyCard) => {
+  if (!card) return
+
+  // 从 summary 解析社区名、面积与卧室数量（容错处理）
+  // 示例："阳光小区 · 85㎡ · 2室1厅1卫"
+  const parts = (card.summary || '').split('·').map(s => s.trim())
+  const community = parts[0] || ''
+  const areaMatch = (card.summary || '').match(/(\d+\.?\d*)㎡/)
+  const bedroomMatch = (card.summary || '').match(/(\d+)室/)
+
+  const area = areaMatch ? Number(areaMatch[1]) : undefined
+  const bedroomCount = bedroomMatch ? Number(bedroomMatch[1]) : undefined
+
+  const mapped: PropertyDetail = {
+    propertyId: card.propertyId,
+    title: card.title,
+    status: 'for_sale',
+    communityName: community,
+    viewCount: 0,
+    favoriteCount: 0,
+    updatedAt: new Date().toISOString(),
+    priceInfo: {
+      total_price: card.totalPrice,
+      unit_price: area && card.totalPrice ? Math.round((card.totalPrice * 10000) / area) : 0
+    },
+    layoutInfo: {
+      bedroom_count: bedroomCount || 0,
+      living_room_count: 0,
+      bathroom_count: 0,
+      area: area || 0
+    },
+    basicInfo: {
+      property_type: 'apartment',
+      build_year: undefined as unknown as number
+    },
+    locationInfo: {
+      province: '',
+      city: '',
+      district: ''
+    }
+  }
+
+  selectedProperty.value = mapped
+  showPropertyModal.value = true
+}
+
 // 处理收藏
 const handleFavorite = async (propertyId: number) => {
   try {
-    // 检查用户是否已登录
-    if (!authStore.isLoggedIn) {
-      alert('请先登录')
-      // 跳转到登录页
-      window.location.hash = '#/login'
-      return
-    }
-
-    // 获取当前用户ID（与ProfilePage.vue中使用相同的逻辑）
-    let userId = authStore.userId
-    if (!userId) {
-      try {
-        const userInfoStr = localStorage.getItem('userInfo')
-        if (userInfoStr) {
-          const userInfo = JSON.parse(userInfoStr)
-          userId = userInfo.userId || null
-        }
-      } catch (err) {
-        console.error('从 localStorage 解析用户信息失败:', err)
-      }
-    }
-
-    if (!userId) {
-      alert('用户信息异常，请重新登录')
-      return
-    }
-
+    const userId = 1 // 暂时使用固定用户ID，后续从store获取
     await queryAPI.addFavorite(userId, propertyId)
     alert('收藏成功！')
   } catch (error) {
@@ -639,6 +593,7 @@ const handleFavorite = async (propertyId: number) => {
     alert('收藏失败，请重试')
   }
 }
+
 // 处理购买
 const handlePurchase = async (property: PropertyDetail) => {
   // 这里可以实现购买逻辑，比如跳转到购买页面或调用购买API
