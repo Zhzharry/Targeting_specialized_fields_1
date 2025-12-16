@@ -135,6 +135,114 @@ public class QueryController {
         }
     }
 
+    /**
+     * 记录房源浏览。
+     * 点击房源时调用此接口，会：
+     * 1. 增加房源的浏览次数（view_count + 1）
+     * 2. 如果 source 参数为 "history" 或 "favorite"（从浏览记录或收藏进入），只更新已有浏览记录的浏览时间
+     * 3. 否则，如果已有浏览记录则更新浏览时间，如果没有则插入新记录
+     */
+    @PostMapping("/browse")
+    public ResponseEntity<Map<String, Object>> recordBrowse(
+            @RequestParam("userId") Long userId,
+            @RequestParam("propertyId") Long propertyId,
+            @RequestParam(value = "source", required = false) String source) {
+
+        try (Connection connection = getConnection()) {
+            // 验证用户是否存在
+            String checkUserSql = "SELECT COUNT(1) FROM users WHERE user_id = ?";
+            try (PreparedStatement checkUser = connection.prepareStatement(checkUserSql)) {
+                checkUser.setLong(1, userId);
+                try (ResultSet rs = checkUser.executeQuery()) {
+                    if (!rs.next() || rs.getInt(1) == 0) {
+                        Map<String, Object> error = new HashMap<String, Object>();
+                        error.put("message", "用户不存在");
+                        error.put("userId", userId);
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                    }
+                }
+            }
+
+            // 验证房源是否存在
+            String checkPropertySql = "SELECT COUNT(1) FROM properties WHERE property_id = ?";
+            try (PreparedStatement checkProperty = connection.prepareStatement(checkPropertySql)) {
+                checkProperty.setLong(1, propertyId);
+                try (ResultSet rs = checkProperty.executeQuery()) {
+                    if (!rs.next() || rs.getInt(1) == 0) {
+                        Map<String, Object> error = new HashMap<String, Object>();
+                        error.put("message", "房源不存在");
+                        error.put("propertyId", propertyId);
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                    }
+                }
+            }
+
+            // 增加房源的浏览次数
+            String updateViewCountSql = "UPDATE properties SET view_count = view_count + 1 WHERE property_id = ?";
+            try (PreparedStatement ps = connection.prepareStatement(updateViewCountSql)) {
+                ps.setLong(1, propertyId);
+                ps.executeUpdate();
+            }
+
+            // 判断来源：如果是从浏览记录或收藏进入，只更新已有记录的浏览时间
+            boolean isFromHistoryOrFavorite = "history".equalsIgnoreCase(source) || "favorite".equalsIgnoreCase(source);
+
+            if (isFromHistoryOrFavorite) {
+                // 只更新已有浏览记录的浏览时间
+                String updateHistorySql = "UPDATE browsing_history SET created_at = CURRENT_TIMESTAMP " +
+                        "WHERE user_id = ? AND property_id = ?";
+                try (PreparedStatement ps = connection.prepareStatement(updateHistorySql)) {
+                    ps.setLong(1, userId);
+                    ps.setLong(2, propertyId);
+                    ps.executeUpdate();
+                }
+            } else {
+                // 检查是否已有浏览记录
+                String checkHistorySql = "SELECT COUNT(1) FROM browsing_history WHERE user_id = ? AND property_id = ?";
+                boolean hasHistory = false;
+                try (PreparedStatement checkHistory = connection.prepareStatement(checkHistorySql)) {
+                    checkHistory.setLong(1, userId);
+                    checkHistory.setLong(2, propertyId);
+                    try (ResultSet rs = checkHistory.executeQuery()) {
+                        if (rs.next() && rs.getInt(1) > 0) {
+                            hasHistory = true;
+                        }
+                    }
+                }
+
+                if (hasHistory) {
+                    // 更新已有浏览记录的浏览时间
+                    String updateHistorySql = "UPDATE browsing_history SET created_at = CURRENT_TIMESTAMP " +
+                            "WHERE user_id = ? AND property_id = ?";
+                    try (PreparedStatement ps = connection.prepareStatement(updateHistorySql)) {
+                        ps.setLong(1, userId);
+                        ps.setLong(2, propertyId);
+                        ps.executeUpdate();
+                    }
+                } else {
+                    // 插入新的浏览记录
+                    String insertHistorySql = "INSERT INTO browsing_history (user_id, property_id, behavior_data) " +
+                            "VALUES (?, ?, ?)";
+                    try (PreparedStatement ps = connection.prepareStatement(insertHistorySql)) {
+                        ps.setLong(1, userId);
+                        ps.setLong(2, propertyId);
+                        ps.setString(3, "{}"); // 默认空的行为数据
+                        ps.executeUpdate();
+                    }
+                }
+            }
+
+            Map<String, Object> body = new HashMap<String, Object>();
+            body.put("message", "浏览记录已保存");
+            body.put("userId", userId);
+            body.put("propertyId", propertyId);
+            return ResponseEntity.ok(body);
+
+        } catch (SQLException e) {
+            return buildError("记录浏览失败", e);
+        }
+    }
+
     @Autowired
     public QueryController(DataSource dataSource) {
         this.dataSource = dataSource;
