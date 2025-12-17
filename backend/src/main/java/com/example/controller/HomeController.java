@@ -242,16 +242,20 @@ public class HomeController {
                 .limit(needCount)
                 .peek(c -> {
                     c.put("source", "realtime_calculated");
-                    c.put("similarity", Map.of(
-                        "score", c.get("similarityScore"),
-                        "algorithm", "comprehensive",
-                        "factors", Map.of(
-                            "location", 0.35,
-                            "price", 0.30,
-                            "layout", 0.25,
-                            "area", 0.10
-                        )
-                    ));
+                    
+                    // Java 8 兼容：替换 Map.of() 为 HashMap
+                    Map<String, Object> factors = new HashMap<>();
+                    factors.put("location", 0.35);
+                    factors.put("price", 0.30);
+                    factors.put("layout", 0.25);
+                    factors.put("area", 0.10);
+                    
+                    Map<String, Object> similarityMap = new HashMap<>();
+                    similarityMap.put("score", c.get("similarityScore"));
+                    similarityMap.put("algorithm", "comprehensive");
+                    similarityMap.put("factors", factors);
+                    
+                    c.put("similarity", similarityMap);
                     c.remove("similarityScore");
                 })
                 .collect(Collectors.toList());

@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
-
+import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -248,28 +248,345 @@ public class OthersAlsoViewedController {
      * 从数据库获取相似用户
      */
     private List<SimilarUser> getSimilarUsersFromDatabase(Long userId, int limit) {
-        // 先尝试从Hadoop缓存获取
-        if (hadoopService.isCacheAvailable()) {
-            return hadoopService.getSimilarUsersFromCache(userId, limit);
-        }
-        
-        // 降级到数据库查询
+        // 基于用户浏览和收藏行为计算相似度
         String sql = 
             "SELECT " +
-            "CASE WHEN user_id1 = ? THEN user_id2 ELSE user_id1 END as similar_user_id, " +
-            "JSON_EXTRACT(similarity_data, '$.similarity_score') as similarity_score " +
-            "FROM user_similarity " +
-            "WHERE (user_id1 = ? OR user_id2 = ?) " +
-            "AND JSON_EXTRACT(similarity_data, '$.similarity_score') > 0.3 " +
-            "ORDER BY similarity_score DESC " +
+            "bh2.user_id, " +
+            "COUNT(DISTINCT bh1.property_id) as common_views, " +
+            "COUNT(DISTINCT CASE WHEN f1.property_id IS NOT NULL AND f2.property_id IS NOT NULL THEN f1.property_id END) as common_favorites " +
+            "FROM browsing_history bh1 " +
+            "INNER JOIN browsing_history bh2 ON bh1.property_id = bh2.property_id AND bh1.user_id != bh2.user_id " +
+            "LEFT JOIN favorites f1 ON f1.user_id = bh1.user_id AND f1.property_id = bh1.property_id " +
+            "LEFT JOIN favorites f2 ON f2.user_id = bh2.user_id AND f2.property_id = bh1.property_id " +
+            "WHERE bh1.user_id = ? " +
+            "GROUP BY bh2.user_id " +
+            "HAVING common_views > 0 OR common_favorites > 0 " +
+            "ORDER BY (common_views * 1.0 + common_favorites * 2.0) DESC " +
             "LIMIT ?";
+        
+        List<SimilarUser> similarUsers = new ArrayList<SimilarUser>();
+        
+        jdbcTemplate.query(sql, new Object[]{userId, limit}, (rs, rowNum) -> {
+            Long similarUserId = rs.getLong("user_id");
+            int commonViews = rs.getInt("common_views");
+            int commonFavorites = rs.getInt("common_favorites");
+            
+            // 计算相似度：基于共同浏览和收藏的数量
+            // 使用Jaccard相似度的简化版本
+            double similarityValue = Math.min(1.0, (commonViews * 1.0 + commonFavorites * 2.0) / 10.0);
+            Double similarity = Double.valueOf(similarityValue);
+            
+            SimilarUser similarUser = new SimilarUser(similarUserId, similarity);
+            
+            similarUsers.add(similarUser);
+            return similarUser;
+        });
+        
+        return similarUsers;
+    }
 
-        return jdbcTemplate.query(sql, 
-            new Object[]{userId, userId, userId, limit},
-            (rs, rowNum) -> new SimilarUser(
-                rs.getLong("similar_user_id"),
-                rs.getDouble("similarity_score")
-            ));
+    /**
+     * 获取房源详细信息（包含特征）
+     */
+    private Map<String, Object> getPropertyDetailWithFeatures(Long propertyId) {
+        String sql = 
+            "SELECT " +
+            "p.property_id, " +
+            "p.title, " +
+            "p.price_info, " +
+            "p.layout_info, " +
+            "p.basic_info, " +
+            "c.name as community_name, " +
+            "c.location_info " +
+            "FROM properties p " +
+            "LEFT JOIN communities c ON p.community_id = c.community_id " +
+            "WHERE p.property_id = ? AND p.status = 'for_sale'";
+
+        List<Map<String, Object>> results = jdbcTemplate.query(sql, new Object[]{propertyId}, (rs, rowNum) -> {
+            Map<String, Object> item = new HashMap<String, Object>();
+            item.put("propertyId", rs.getLong("property_id"));
+            item.put("title", rs.getString("title"));
+            
+            // 价格信息
+            Double totalPrice = extractJsonDouble(rs.getString("price_info"), "total_price");
+            Double unitPrice = extractJsonDouble(rs.getString("price_info"), "unit_price");
+            item.put("totalPrice", totalPrice != null ? totalPrice : 0);
+            item.put("unitPrice", unitPrice != null ? unitPrice : 0);
+            
+            // 布局信息
+            Double area = extractJsonDouble(rs.getString("layout_info"), "area");
+            Integer bedroomCount = extractJsonInt(rs.getString("layout_info"), "bedroom_count");
+            Integer livingRoomCount = extractJsonInt(rs.getString("layout_info"), "living_room_count");
+            Integer bathroomCount = extractJsonInt(rs.getString("layout_info"), "bathroom_count");
+            item.put("area", area != null ? area : 0);
+            item.put("bedroomCount", bedroomCount != null ? bedroomCount : 0);
+            item.put("livingRoomCount", livingRoomCount != null ? livingRoomCount : 0);
+            item.put("bathroomCount", bathroomCount != null ? bathroomCount : 0);
+            
+            // 位置信息
+            String locationInfo = rs.getString("location_info");
+            String communityName = rs.getString("community_name");
+            item.put("communityName", communityName);
+            item.put("locationInfo", locationInfo);
+            
+            // 解析位置信息中的坐标（如果存在）
+            if (locationInfo != null && !locationInfo.isEmpty()) {
+                try {
+                    Map<String, Object> locationMap = objectMapper.readValue(locationInfo, Map.class);
+                    Object latObj = locationMap.get("latitude");
+                    Object lngObj = locationMap.get("longitude");
+                    if (latObj != null) item.put("latitude", latObj instanceof Number ? ((Number) latObj).doubleValue() : Double.parseDouble(latObj.toString()));
+                    if (lngObj != null) item.put("longitude", lngObj instanceof Number ? ((Number) lngObj).doubleValue() : Double.parseDouble(lngObj.toString()));
+                } catch (Exception ignored) {}
+            }
+            
+            // 基本信息
+            String basicInfo = rs.getString("basic_info");
+            if (basicInfo != null && !basicInfo.isEmpty()) {
+                try {
+                    Map<String, Object> basicMap = objectMapper.readValue(basicInfo, Map.class);
+                    item.put("basicInfo", basicMap);
+                } catch (Exception ignored) {}
+            }
+            
+            return item;
+        });
+
+        return results.isEmpty() ? null : results.get(0);
+    }
+
+    /**
+     * 获取候选房源
+     */
+    private List<Map<String, Object>> getCandidateProperties(Long sourceId, Set<Long> excludedIds, int limit) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT " +
+            "p.property_id, " +
+            "p.title, " +
+            "p.price_info, " +
+            "p.layout_info, " +
+            "p.basic_info, " +
+            "c.name as community_name, " +
+            "c.location_info " +
+            "FROM properties p " +
+            "LEFT JOIN communities c ON p.community_id = c.community_id " +
+            "WHERE p.status = 'for_sale' " +
+            "AND p.property_id != ? ");
+        
+        List<Object> params = new ArrayList<Object>();
+        params.add(sourceId);
+        
+        if (!excludedIds.isEmpty()) {
+            String placeholders = String.join(",", Collections.nCopies(excludedIds.size(), "?"));
+            sql.append("AND p.property_id NOT IN (").append(placeholders).append(") ");
+            params.addAll(excludedIds);
+        }
+        
+        sql.append("ORDER BY RAND() LIMIT ?");
+        params.add(limit);
+        
+        List<Map<String, Object>> candidates = new ArrayList<Map<String, Object>>();
+        
+        jdbcTemplate.query(sql.toString(), params.toArray(), (rs, rowNum) -> {
+            Map<String, Object> item = new HashMap<String, Object>();
+            Long propertyId = rs.getLong("property_id");
+            item.put("propertyId", propertyId);
+            item.put("title", rs.getString("title"));
+            
+            // 价格信息
+            Double totalPrice = extractJsonDouble(rs.getString("price_info"), "total_price");
+            Double unitPrice = extractJsonDouble(rs.getString("price_info"), "unit_price");
+            item.put("totalPrice", totalPrice != null ? totalPrice : 0);
+            item.put("unitPrice", unitPrice != null ? unitPrice : 0);
+            
+            // 布局信息
+            Double area = extractJsonDouble(rs.getString("layout_info"), "area");
+            Integer bedroomCount = extractJsonInt(rs.getString("layout_info"), "bedroom_count");
+            Integer livingRoomCount = extractJsonInt(rs.getString("layout_info"), "living_room_count");
+            Integer bathroomCount = extractJsonInt(rs.getString("layout_info"), "bathroom_count");
+            item.put("area", area != null ? area : 0);
+            item.put("bedroomCount", bedroomCount != null ? bedroomCount : 0);
+            item.put("livingRoomCount", livingRoomCount != null ? livingRoomCount : 0);
+            item.put("bathroomCount", bathroomCount != null ? bathroomCount : 0);
+            
+            // 位置信息
+            String locationInfo = rs.getString("location_info");
+            String communityName = rs.getString("community_name");
+            item.put("communityName", communityName);
+            item.put("locationInfo", locationInfo);
+            
+            // 解析位置信息中的坐标（如果存在）
+            if (locationInfo != null && !locationInfo.isEmpty()) {
+                try {
+                    Map<String, Object> locationMap = objectMapper.readValue(locationInfo, Map.class);
+                    Object latObj = locationMap.get("latitude");
+                    Object lngObj = locationMap.get("longitude");
+                    if (latObj != null) item.put("latitude", latObj instanceof Number ? ((Number) latObj).doubleValue() : Double.parseDouble(latObj.toString()));
+                    if (lngObj != null) item.put("longitude", lngObj instanceof Number ? ((Number) lngObj).doubleValue() : Double.parseDouble(lngObj.toString()));
+                } catch (Exception ignored) {}
+            }
+            
+            candidates.add(item);
+            return item;
+        });
+        
+        return candidates;
+    }
+
+    /**
+     * 计算综合相似度
+     */
+    private double calculateComprehensiveSimilarity(Map<String, Object> sourceProperty, Map<String, Object> candidate) {
+        double totalSimilarity = 0.0;
+        double totalWeight = 0.0;
+        
+        // 1. 位置相似度 (权重 0.35)
+        double locationSimilarity = calculateLocationSimilarity(sourceProperty, candidate);
+        totalSimilarity += locationSimilarity * 0.35;
+        totalWeight += 0.35;
+        
+        // 2. 价格相似度 (权重 0.30)
+        double priceSimilarity = calculatePriceSimilarity(sourceProperty, candidate);
+        totalSimilarity += priceSimilarity * 0.30;
+        totalWeight += 0.30;
+        
+        // 3. 布局相似度 (权重 0.25)
+        double layoutSimilarity = calculateLayoutSimilarity(sourceProperty, candidate);
+        totalSimilarity += layoutSimilarity * 0.25;
+        totalWeight += 0.25;
+        
+        // 4. 面积相似度 (权重 0.10)
+        double areaSimilarity = calculateAreaSimilarity(sourceProperty, candidate);
+        totalSimilarity += areaSimilarity * 0.10;
+        totalWeight += 0.10;
+        
+        return totalWeight > 0 ? totalSimilarity / totalWeight : 0.0;
+    }
+
+    /**
+     * 计算位置相似度
+     */
+    private double calculateLocationSimilarity(Map<String, Object> source, Map<String, Object> candidate) {
+        String sourceCommunity = (String) source.get("communityName");
+        String candidateCommunity = (String) candidate.get("communityName");
+        
+        // 如果同一小区，相似度为1.0
+        if (sourceCommunity != null && sourceCommunity.equals(candidateCommunity)) {
+            return 1.0;
+        }
+        
+        // 如果有坐标信息，计算距离
+        Object sourceLat = source.get("latitude");
+        Object sourceLng = source.get("longitude");
+        Object candidateLat = candidate.get("latitude");
+        Object candidateLng = candidate.get("longitude");
+        
+        if (sourceLat != null && sourceLng != null && candidateLat != null && candidateLng != null) {
+            try {
+                double lat1 = sourceLat instanceof Number ? ((Number) sourceLat).doubleValue() : Double.parseDouble(sourceLat.toString());
+                double lng1 = sourceLng instanceof Number ? ((Number) sourceLng).doubleValue() : Double.parseDouble(sourceLng.toString());
+                double lat2 = candidateLat instanceof Number ? ((Number) candidateLat).doubleValue() : Double.parseDouble(candidateLat.toString());
+                double lng2 = candidateLng instanceof Number ? ((Number) candidateLng).doubleValue() : Double.parseDouble(candidateLng.toString());
+                
+                // 计算距离（简化版，使用欧几里得距离）
+                double distance = Math.sqrt(Math.pow(lat1 - lat2, 2) + Math.pow(lng1 - lng2, 2));
+                
+                // 距离越近，相似度越高（假设0.01度约等于1公里）
+                return Math.max(0.0, 1.0 - distance / 0.1);
+            } catch (Exception ignored) {}
+        }
+        
+        // 默认相似度
+        return 0.3;
+    }
+
+    /**
+     * 计算价格相似度
+     */
+    private double calculatePriceSimilarity(Map<String, Object> source, Map<String, Object> candidate) {
+        Object sourcePriceObj = source.get("totalPrice");
+        Object candidatePriceObj = candidate.get("totalPrice");
+        
+        if (sourcePriceObj == null || candidatePriceObj == null) {
+            return 0.5;
+        }
+        
+        double sourcePrice = sourcePriceObj instanceof Number ? ((Number) sourcePriceObj).doubleValue() : Double.parseDouble(sourcePriceObj.toString());
+        double candidatePrice = candidatePriceObj instanceof Number ? ((Number) candidatePriceObj).doubleValue() : Double.parseDouble(candidatePriceObj.toString());
+        
+        if (sourcePrice == 0 || candidatePrice == 0) {
+            return 0.5;
+        }
+        
+        // 计算价格差异比例
+        double priceRatio = Math.min(sourcePrice, candidatePrice) / Math.max(sourcePrice, candidatePrice);
+        
+        return priceRatio;
+    }
+
+    /**
+     * 计算布局相似度
+     */
+    private double calculateLayoutSimilarity(Map<String, Object> source, Map<String, Object> candidate) {
+        int sourceBedroom = getIntValue(source, "bedroomCount", 0);
+        int candidateBedroom = getIntValue(candidate, "bedroomCount", 0);
+        int sourceLiving = getIntValue(source, "livingRoomCount", 0);
+        int candidateLiving = getIntValue(candidate, "livingRoomCount", 0);
+        int sourceBathroom = getIntValue(source, "bathroomCount", 0);
+        int candidateBathroom = getIntValue(candidate, "bathroomCount", 0);
+        
+        // 计算各项的匹配度
+        double bedroomMatch = sourceBedroom == candidateBedroom ? 1.0 : (Math.abs(sourceBedroom - candidateBedroom) == 1 ? 0.7 : 0.3);
+        double livingMatch = sourceLiving == candidateLiving ? 1.0 : (Math.abs(sourceLiving - candidateLiving) == 1 ? 0.7 : 0.3);
+        double bathroomMatch = sourceBathroom == candidateBathroom ? 1.0 : (Math.abs(sourceBathroom - candidateBathroom) == 1 ? 0.7 : 0.3);
+        
+        // 加权平均
+        return (bedroomMatch * 0.5 + livingMatch * 0.3 + bathroomMatch * 0.2);
+    }
+
+    /**
+     * 计算面积相似度
+     */
+    private double calculateAreaSimilarity(Map<String, Object> source, Map<String, Object> candidate) {
+        double sourceArea = getDoubleValue(source, "area", 0);
+        double candidateArea = getDoubleValue(candidate, "area", 0);
+        
+        if (sourceArea == 0 || candidateArea == 0) {
+            return 0.5;
+        }
+        
+        // 计算面积差异比例
+        double areaRatio = Math.min(sourceArea, candidateArea) / Math.max(sourceArea, candidateArea);
+        
+        return areaRatio;
+    }
+
+    /**
+     * 获取整数值（辅助方法）
+     */
+    private int getIntValue(Map<String, Object> map, String key, int defaultValue) {
+        Object value = map.get(key);
+        if (value == null) return defaultValue;
+        if (value instanceof Number) return ((Number) value).intValue();
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 获取双精度值（辅助方法）
+     */
+    private double getDoubleValue(Map<String, Object> map, String key, double defaultValue) {
+        Object value = map.get(key);
+        if (value == null) return defaultValue;
+        if (value instanceof Number) return ((Number) value).doubleValue();
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
     }
 
     /**
