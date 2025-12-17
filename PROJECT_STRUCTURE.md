@@ -25,11 +25,11 @@ Targeting_specialized_fields_1/
 
 ### 路径：`/backend`
 
-后端是一个 Spring Boot 应用，提供 REST API 服务。
+后端是一个 Spring Boot 应用，提供 REST API 服务。集成了 Hadoop/Spark，支持大规模数据离线计算。
 
 ```
 backend/
-├── pom.xml                  # Maven 配置文件，定义项目依赖和构建配置
+├── pom.xml                  # Maven 配置文件，包含 Hadoop/Spark/MySQL 依赖
 ├── mvnw                     # Maven Wrapper 脚本（Linux/Mac）
 ├── mvnw.cmd                 # Maven Wrapper 脚本（Windows）
 │
@@ -38,78 +38,139 @@ backend/
 │   │   └── com/example/
 │   │       ├── SpringbootVueDemoApplication.java   # 应用主入口类
 │   │       │
+│   │       ├── batch/                              # ⭐ 批处理模块（新增）
+│   │       │   ├── PropertySimilarityBatchJob.java # Spark 房源相似度计算 Job
+│   │       │   │   # 包含 6 项优化算法：
+│   │       │   │   # 1. 自适应加权向量
+│   │       │   │   # 2. Haversine 地理距离
+│   │       │   │   # 3. 时间衰减权重
+│   │       │   │   # 4. 特征交互项
+│   │       │   │   # 5. 混合相似度融合
+│   │       │   │   # 6. 分层计算（粗排+精排）
+│   │       │   ├── UserSimilarityBatchJob.java     # Spark 用户相似度计算 Job
+│   │       │   └── README.md                       # 批处理 Job 说明
+│   │       │
 │   │       ├── config/
-│   │       │   └── SparkConfig.java               # Spark 配置类
+│   │       │   ├── SparkConfig.java                # Spark 配置类（支持 YARN/local 模式）
+│   │       │   └── HadoopConfig.java               # Hadoop 配置类
 │   │       │
 │   │       ├── controller/                         # Web 控制层
-│   │       │   ├── HomeController.java            # 主页控制器
-│   │       │   ├── LoginController.java           # 登录认证控制器
-│   │       │   ├── ProfileController.java         # 用户资料控制器
-│   │       │   ├── QueryController.java           # 数据查询控制器
-│   │       │   └── README.md                      # 控制器说明文档
+│   │       │   ├── HomeController.java             # 主页控制器（Java 8 兼容）
+│   │       │   ├── LoginController.java            # 登录认证控制器
+│   │       │   ├── ProfileController.java          # 用户资料控制器
+│   │       │   ├── QueryController.java            # 数据查询接口
+│   │       │   ├── OthersAlsoViewedController.java # 其他用户也在看
+│   │       │   └── README.md                       # 控制器说明文档
 │   │       │
 │   │       ├── service/                            # 业务逻辑层
-│   │       │   ├── PropertySimilarityService.java       # 房产相似度计算服务
-│   │       │   ├── UserSimilarityService.java           # 用户相似度计算服务
+│   │       │   ├── PropertySimilarityService.java   # 离线调度器（原实时计算改为调度）
+│   │       │   ├── UserSimilarityService.java       # 用户相似度服务
 │   │       │   │
-│   │       │   └── predict_zhz/                         # 房价预测服务模块
+│   │       │   └── predict_zhz/                     # 房价预测服务模块
 │   │       │       ├── HousePricePredictionService.java # 房价预测核心服务
-│   │       │       ├── predict_price.py                 # Python 预测脚本
-│   │       │       ├── README.md                        # 预测模块说明
+│   │       │       ├── predict_price.py             # Python 预测脚本
+│   │       │       ├── README.md                    # 预测模块说明
 │   │       │       ├── beijing/
-│   │       │       │   └── model_config.json           # 北京模型配置
+│   │       │       │   └── model_config.json        # 北京模型配置
 │   │       │       ├── shanghai/
-│   │       │       │   └── model_config.json           # 上海模型配置
+│   │       │       │   └── model_config.json        # 上海模型配置
 │   │       │       └── tianjin/
-│   │       │           └── model_config.json           # 天津模型配置
+│   │       │           └── model_config.json        # 天津模型配置
 │   │       │
-│   │       └── README.md                          # 代码结构说明文档
+│   │       ├── util/                               # 工具类
+│   │       │   ├── HdfsUtil.java                    # ⭐ HDFS 文件操作工具（新增）
+│   │       │   ├── SparkJobLauncher.java            # ⭐ Spark Job 提交器（新增）
+│   │       │   └── README.md                        # 工具类说明
+│   │       │
+│   │       ├── hadoop/                              # Hadoop 相关工具
+│   │       │   ├── mapreduce/                       # MapReduce 任务（可选）
+│   │       │   ├── writable/
+│   │       │   │   └── UserBehaviorWritable.java    # 用户行为 Writable 类
+│   │       │   └── README.md
+│   │       │
+│   │       └── README.md                            # 代码结构说明文档
 │   │
-│   ├── resources/                                  # 资源文件
-│   │   ├── application.properties                 # Spring Boot 配置文件
-│   │   └── static/                                # 静态文件目录
-│   │       └── README.md                          # 静态文件说明
+│   ├── resources/                                   # 资源文件
+│   │   ├── application.properties                  # ⭐ 已更新：加入 Spark/Hadoop 配置
+│   │   └── static/                                 # 静态文件目录
+│   │       └── README.md                           # 静态文件说明
 │   │
 │   └── 文档/
-│       └── 接口文档.md                            # API 接口文档
+│       └── 接口文档.md                             # API 接口文档
 │
 ├── src/test/
-│   └── java/                                      # 测试源代码
+│   └── java/                                       # 测试源代码
 │
-├── target/                                        # Maven 编译输出目录
-│   ├── classes/                                   # 编译后的类文件
-│   ├── springboot-vue-demo-1.0.0.jar.original   # 原始 JAR 包
-│   ├── generated-sources/                         # 生成的源代码
-│   ├── generated-test-sources/                    # 生成的测试源代码
-│   ├── maven-archiver/                            # Maven 归档信息
-│   └── maven-status/                              # Maven 编译状态
+├── target/                                         # Maven 编译输出目录
+│   ├── classes/                                    # 编译后的类文件
+│   ├── springboot-vue-demo-1.0.0.jar              # 可执行 JAR 包
+│   ├── generated-sources/                          # 生成的源代码
+│   ├── maven-status/                               # Maven 编译状态
+│   └── ...
 │
 ├── SQL/
-│   ├── 备份.sql                                   # 数据库备份脚本
-│   └── 注入.sql                                   # 数据库初始化脚本
+│   ├── 备份.sql                                    # 数据库备份脚本
+│   └── 注入.sql                                    # 数据库初始化脚本
 │
-├── DEPENDENCIES.md                                # 依赖管理说明文档
-└── README.md                                      # 后端项目说明
+├── DEPENDENCIES.md                                 # 依赖管理说明文档
+├── HADOOP_OPTIMIZATION_GUIDE.md                    # ⭐ Hadoop 优化与部署指南（新增）
+└── README.md                                       # 后端项目说明
 ```
 
-### 核心模块说明：
+### 核心模块说明
 
-#### **Controller（控制层）**
-- `HomeController`: 处理主页请求
+#### **Controller（控制层）** - 在线服务
+- `HomeController`: 主页房源推荐（从 `property_similarity` 表读取预计算结果）✅ Java 8 兼容
 - `LoginController`: 用户登录认证
 - `ProfileController`: 用户资料管理
 - `QueryController`: 数据查询接口
+- `OthersAlsoViewedController`: 其他用户也在看推荐
+
+#### **Batch Module（批处理）** ⭐ 新增离线计算
+- `PropertySimilarityBatchJob`: Spark Job 计算房源相似度
+  - **算法优化 6 项**：
+    1. 自适应加权向量（按房源属性动态调权）
+    2. Haversine 地理距离（精确距离计算）
+    3. 时间衰减权重（新房优先，`exp(-days/90)` 衰减）
+    4. 特征交互项（价格/面积比、楼层比等 8 项）
+    5. 混合相似度融合（内容 60% + 地理 25% + 协同 15%）
+    6. 分层计算（粗排+精排，效率↑3-5倍）
+  - 输入：HDFS 或 MySQL 中的 `properties`、`communities`、浏览历史
+  - 输出：写入 `property_similarity` 表，同时 HDFS 存储备份
+  - 运行频率：每天凌晨 2 点（@Scheduled）或手动触发
+  
+- `UserSimilarityBatchJob`: Spark Job 计算用户相似度
+  - 基于用户-房源行为矩阵（浏览、收藏、评分）
+  - 输出：`user_similarity` 表
 
 #### **Service（业务逻辑层）**
-- `PropertySimilarityService`: 基于属性的房产相似度推荐算法
-- `UserSimilarityService`: 基于用户的相似度计算
-- `HousePricePredictionService`: 房价预测服务
-  - 支持多个城市（北京、上海、天津）
-  - 集成 Python 预测模型（`predict_price.py`）
-  - 每个城市有单独的模型配置文件
+- `PropertySimilarityService`: 改为离线调度器
+  - 原实时计算改为定时触发 `PropertySimilarityBatchJob`
+  - 保留降级逻辑（若无预算结果则实时计算）
+  
+- `UserSimilarityService`: 用户相似度服务
 
-#### **Config（配置层）**
-- `SparkConfig`: Apache Spark 配置，用于大数据处理
+- `HousePricePredictionService`: 房价预测服务
+  - 支持多城市（北京、上海、天津）
+  - 集成 Python 预测模型
+
+#### **Config（配置层）** ⭐ 已增强
+- `SparkConfig`: Spark 配置
+  - 支持 local（本地开发）和 yarn（集群生产）模式
+  - 从 `application.properties` 读取参数
+  
+- `HadoopConfig`: Hadoop 配置
+  - HDFS 连接配置
+  - 数据路径配置
+
+#### **Util（工具层）** ⭐ 新增
+- `HdfsUtil`: HDFS 文件操作
+  - 上传/下载/删除/创建文件/目录
+  - 读写 Parquet/CSV 格式
+  
+- `SparkJobLauncher`: Spark Job 提交器
+  - 本地运行模式
+  - YARN 集群提交
 
 ---
 
