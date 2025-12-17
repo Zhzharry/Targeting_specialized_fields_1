@@ -3,17 +3,24 @@ package com.example.controller;
 
 import com.example.service.PropertySimilarityService;
 import com.example.service.PropertySimilarityCFService;
+import com.example.service.UserSimilarityPropagationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 房源相似度计算REST API控制器
+ * 相似度计算REST API控制器
+ * 
+ * 包含：
+ * 1. 房源相似度接口（原有）
+ * 2. 用户相似度接口（新增）
  */
 @RestController
 @RequestMapping("/api/similarity")
@@ -26,17 +33,23 @@ public class SimilarityController {
     @Autowired
     private PropertySimilarityCFService cfService;
     
+    @Autowired
+    private UserSimilarityPropagationService userSimilarityService;
+    
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    
+    // ==================== 房源相似度接口（原有） ====================
+    
     /**
-     * 手动触发完整的相似度计算
+     * 手动触发完整的房源相似度计算
      * POST /api/similarity/calculate
      */
     @PostMapping("/calculate")
     public ResponseEntity<Map<String, Object>> calculateSimilarity() {
         Map<String, Object> result = new HashMap<>();
-        long startTime = System.currentTimeMillis();
         
         try {
-            // 异步执行计算
             CompletableFuture.runAsync(() -> {
                 similarityService.calculatePropertySimilarityFull();
                 cfService.calculatePropertySimilarityCF();
@@ -187,31 +200,25 @@ public class SimilarityController {
     }
     
     /**
-     * 获取相似度计算统计信息
+     * 获取房源相似度计算统计信息
      * GET /api/similarity/stats
      */
     @GetMapping("/stats")
-    public ResponseEntity<Map<String, Object>> getStatistics(
-            @Autowired org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
-        
+    public ResponseEntity<Map<String, Object>> getStatistics() {
         Map<String, Object> result = new HashMap<>();
         
         try {
-            // 总相似度记录数
             Integer totalPairs = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM property_similarity", Integer.class);
             
-            // 平均相似度
             Double avgSimilarity = jdbcTemplate.queryForObject(
                 "SELECT AVG(CAST(JSON_EXTRACT(similarity_data, '$.similarity_score') AS DECIMAL(8,4))) " +
                 "FROM property_similarity", Double.class);
             
-            // 同一聚类的记录数
             Integer sameClusterPairs = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM property_similarity " +
                 "WHERE JSON_EXTRACT(similarity_data, '$.same_cluster') = true", Integer.class);
             
-            // 有协同过滤数据的记录数
             Integer cfPairs = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM property_similarity " +
                 "WHERE JSON_EXTRACT(similarity_data, '$.cf_similarity') IS NOT NULL", Integer.class);
@@ -227,6 +234,271 @@ public class SimilarityController {
         } catch (Exception e) {
             result.put("success", false);
             result.put("message", "获取统计信息失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    // ==================== 用户相似度接口（新增） ====================
+    
+    /**
+     * 触发全量用户相似度计算（带传递算法）
+     * POST /api/similarity/user/calculate
+     */
+    @PostMapping("/user/calculate")
+    public ResponseEntity<Map<String, Object>> calculateUserSimilarity() {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            long startTime = System.currentTimeMillis();
+            userSimilarityService.calculateUserSimilarityFull();
+            long endTime = System.currentTimeMillis();
+            
+            result.put("success", true);
+            result.put("message", "用户相似度计算完成（含传递算法）");
+            result.put("duration_ms", endTime - startTime);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "计算失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    /**
+     * 触发单个用户的增量相似度计算
+     * POST /api/similarity/user/{userId}/calculate
+     */
+    @PostMapping("/user/{userId}/calculate")
+    public ResponseEntity<Map<String, Object>> calculateUserSimilarityIncremental(
+            @PathVariable int userId) {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            userSimilarityService.onUserPreferenceChanged(userId);
+            
+            result.put("success", true);
+            result.put("message", "用户 " + userId + " 的增量计算已触发（异步执行）");
+            result.put("user_id", userId);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "计算失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    /**
+     * 获取与指定用户相似的用户列表
+     * GET /api/similarity/user/{userId}/similar?limit=10
+     */
+    @GetMapping("/user/{userId}/similar")
+    public ResponseEntity<Map<String, Object>> getSimilarUsers(
+            @PathVariable int userId,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            List<Map<String, Object>> similarUsers = userSimilarityService.getSimilarUsers(userId, limit);
+            
+            result.put("success", true);
+            result.put("user_id", userId);
+            result.put("similar_users", similarUsers);
+            result.put("count", similarUsers.size());
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "查询失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    /**
+     * 通过相似度传递推荐用户（发现间接相似的用户）
+     * GET /api/similarity/user/{userId}/propagation?limit=10
+     * 
+     * 算法说明：
+     * 如果 A 和 B 相似度高，B 和 C 相似度高，
+     * 则推断 A 和 C 也可能相似（即使 A 和 C 直接相似度不高）
+     */
+    @GetMapping("/user/{userId}/propagation")
+    public ResponseEntity<Map<String, Object>> getRecommendedUsersByPropagation(
+            @PathVariable int userId,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            List<Integer> recommendedUsers = userSimilarityService.getRecommendedUsersByPropagation(userId, limit);
+            
+            result.put("success", true);
+            result.put("user_id", userId);
+            result.put("recommended_users", recommendedUsers);
+            result.put("count", recommendedUsers.size());
+            result.put("algorithm", "similarity_propagation");
+            result.put("description", "通过相似度传递发现的间接相似用户");
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "查询失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    /**
+     * 获取用户相似度统计信息
+     * GET /api/similarity/user/stats
+     */
+    @GetMapping("/user/stats")
+    public ResponseEntity<Map<String, Object>> getUserSimilarityStats() {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            Map<String, Object> stats = userSimilarityService.getSimilarityStats();
+            result.put("success", true);
+            result.putAll(stats);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "查询失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    /**
+     * 记录用户浏览行为（会累积触发增量计算）
+     * POST /api/similarity/user/{userId}/browse/{propertyId}
+     */
+    @PostMapping("/user/{userId}/browse/{propertyId}")
+    public ResponseEntity<Map<String, Object>> recordUserBrowsing(
+            @PathVariable int userId,
+            @PathVariable int propertyId) {
+        
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            userSimilarityService.recordUserBrowsing(userId, propertyId);
+            
+            result.put("success", true);
+            result.put("message", "浏览行为已记录");
+            result.put("user_id", userId);
+            result.put("property_id", propertyId);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "记录失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    /**
+     * 通知用户退出（触发相似度更新检查）
+     * POST /api/similarity/user/{userId}/logout
+     */
+    @PostMapping("/user/{userId}/logout")
+    public ResponseEntity<Map<String, Object>> notifyUserLogout(@PathVariable int userId) {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            userSimilarityService.onUserLogout(userId);
+            
+            result.put("success", true);
+            result.put("message", "用户退出通知已处理");
+            result.put("user_id", userId);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "处理失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    // ==================== 综合接口（新增） ====================
+    
+    /**
+     * 触发全量计算（房源 + 用户相似度）
+     * POST /api/similarity/calculate/all
+     */
+    @PostMapping("/calculate/all")
+    public ResponseEntity<Map<String, Object>> calculateAllSimilarities() {
+        Map<String, Object> result = new HashMap<>();
+        List<String> messages = new ArrayList<>();
+        boolean allSuccess = true;
+        
+        long startTime = System.currentTimeMillis();
+        
+        // 1. 计算房源相似度
+        try {
+            similarityService.calculatePropertySimilarityFull();
+            cfService.calculatePropertySimilarityCF();
+            cfService.mergeSimilarityResults();
+            messages.add("房源相似度计算完成");
+        } catch (Exception e) {
+            messages.add("房源相似度计算失败: " + e.getMessage());
+            allSuccess = false;
+        }
+        
+        // 2. 计算用户相似度
+        try {
+            userSimilarityService.calculateUserSimilarityFull();
+            messages.add("用户相似度计算完成");
+        } catch (Exception e) {
+            messages.add("用户相似度计算失败: " + e.getMessage());
+            allSuccess = false;
+        }
+        
+        long endTime = System.currentTimeMillis();
+        
+        result.put("success", allSuccess);
+        result.put("messages", messages);
+        result.put("duration_ms", endTime - startTime);
+        
+        return ResponseEntity.status(allSuccess ? 200 : 500).body(result);
+    }
+    
+    /**
+     * 获取综合统计信息（房源 + 用户相似度）
+     * GET /api/similarity/stats/all
+     */
+    @GetMapping("/stats/all")
+    public ResponseEntity<Map<String, Object>> getAllStats() {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            // 房源相似度统计
+            Map<String, Object> propertyStats = new HashMap<>();
+            propertyStats.put("total_pairs", jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM property_similarity", Integer.class));
+            propertyStats.put("avg_similarity", jdbcTemplate.queryForObject(
+                "SELECT AVG(CAST(JSON_EXTRACT(similarity_data, '$.similarity_score') AS DECIMAL(8,4))) " +
+                "FROM property_similarity", Double.class));
+            
+            // 用户相似度统计
+            Map<String, Object> userStats = userSimilarityService.getSimilarityStats();
+            
+            result.put("success", true);
+            result.put("property_similarity", propertyStats);
+            result.put("user_similarity", userStats);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "查询失败: " + e.getMessage());
             return ResponseEntity.internalServerError().body(result);
         }
     }
