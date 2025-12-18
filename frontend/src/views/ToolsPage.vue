@@ -1,9 +1,20 @@
 <!-- src/views/ToolsPage.vue -->
 <template>
   <div class="tools-page">
+    <!-- 奢华背景装饰 -->
+    <div class="luxury-bg">
+      <div class="floating-particle p-1"></div>
+      <div class="floating-particle p-2"></div>
+      <div class="floating-particle p-3"></div>
+      <div class="radial-glow"></div>
+    </div>
+
     <!-- 顶部导航 -->
     <header class="header">
-      <div class="logo" @click="$router.push('/search')">房产平台</div>
+      <div class="logo" @click="$router.push('/search')">
+        <span class="logo-icon">🏛️</span>
+        <span class="logo-text">尊贵房产</span>
+      </div>
       <nav class="top-nav">
         <button class="nav-link" @click="$router.push('/search')">
           <span class="nav-icon">🔍</span>
@@ -58,175 +69,136 @@
           <h2>房价预测分析</h2>
           <p>基于机器学习算法预测未来房价趋势</p>
         </div>
-
-        <div class="prediction-form">
-          <div class="form-grid">
-            <!-- 城市选择 -->
-            <div class="form-group">
-              <label>所在城市</label>
-              <select v-model="predictionForm.city" @change="onCityChange">
-                <option value="">请选择城市</option>
-                <option value="北京">北京</option>
-                <option value="上海">上海</option>
-                <option value="天津">天津</option>
-                <option value="石家庄">石家庄</option>
-              </select>
+        <div class="prediction-flex">
+          <!-- 左侧表单 -->
+          <div class="prediction-form prediction-form-col">
+            <div class="form-grid">
+              <!-- 城市选择 -->
+              <div class="form-group">
+                <label>所在城市</label>
+                <select v-model="predictionForm.city" @change="onCityChange">
+                  <option value="">请选择城市</option>
+                  <option value="北京">北京</option>
+                  <option value="上海">上海</option>
+                  <option value="天津">天津</option>
+                  <option value="石家庄">石家庄</option>
+                </select>
+              </div>
+              <!-- 房屋面积 -->
+              <div class="form-group">
+                <label>房屋面积 (㎡)</label>
+                <input v-model.number="predictionForm.area" type="number" placeholder="请输入面积" min="20" max="500" />
+              </div>
+              <!-- 室数 -->
+              <div class="form-group">
+                <label>室数</label>
+                <select v-model="predictionForm.roomCount">
+                  <option value="">请选择室数</option>
+                  <option value="1">1室</option>
+                  <option value="2">2室</option>
+                  <option value="3">3室</option>
+                  <option value="4">4室</option>
+                  <option value="5">5室及以上</option>
+                </select>
+              </div>
+              <!-- 厅数 -->
+              <div class="form-group">
+                <label>厅数</label>
+                <select v-model="predictionForm.livingRoomCount">
+                  <option value="">请选择厅数</option>
+                  <option value="1">1厅</option>
+                  <option value="2">2厅</option>
+                </select>
+              </div>
+              <!-- 卫数 -->
+              <div class="form-group">
+                <label>卫数</label>
+                <select v-model="predictionForm.bathroomCount">
+                  <option value="">请选择卫数</option>
+                  <option value="1">1卫</option>
+                  <option value="2">2卫</option>
+                </select>
+              </div>
+              <!-- 房龄 -->
+              <div class="form-group">
+                <label>房龄 (年)</label>
+                <input v-model.number="predictionForm.age" type="number" placeholder="请输入房龄" min="0" max="50" />
+              </div>
+              <!-- 朝向评分 -->
+              <div class="form-group">
+                <label>朝向评分 (1-5分)</label>
+                <select v-model="predictionForm.orientationScore">
+                  <option value="">请选择朝向评分</option>
+                  <option value="1">1分 (北向)</option>
+                  <option value="2">2分 (东/西向)</option>
+                  <option value="3">3分 (东北/西北)</option>
+                  <option value="4">4分 (东南/西南)</option>
+                  <option value="5">5分 (南向)</option>
+                </select>
+              </div>
+              <!-- 到市中心距离 -->
+              <div class="form-group">
+                <label>到市中心距离 (km)</label>
+                <input v-model.number="predictionForm.distanceToCenter" type="number" placeholder="请输入距离" min="0" max="50" step="0.1" />
+              </div>
+              <!-- 经度 -->
+              <div class="form-group">
+                <label>经度 (可选)</label>
+                <input v-model.number="predictionForm.longitude" type="number" placeholder="如：116.4014" step="0.0001" />
+              </div>
+              <!-- 纬度 -->
+              <div class="form-group">
+                <label>纬度 (可选)</label>
+                <input v-model.number="predictionForm.latitude" type="number" placeholder="如：39.9263" step="0.0001" />
+              </div>
             </div>
-
-            <!-- 房屋面积 -->
-            <div class="form-group">
-              <label>房屋面积 (㎡)</label>
-              <input
-                v-model.number="predictionForm.area"
-                type="number"
-                placeholder="请输入面积"
-                min="20"
-                max="500"
-              />
-            </div>
-
-            <!-- 室数 -->
-            <div class="form-group">
-              <label>室数</label>
-              <select v-model="predictionForm.roomCount">
-                <option value="">请选择室数</option>
-                <option value="1">1室</option>
-                <option value="2">2室</option>
-                <option value="3">3室</option>
-                <option value="4">4室</option>
-                <option value="5">5室及以上</option>
-              </select>
-            </div>
-
-            <!-- 厅数 -->
-            <div class="form-group">
-              <label>厅数</label>
-              <select v-model="predictionForm.livingRoomCount">
-                <option value="">请选择厅数</option>
-                <option value="1">1厅</option>
-                <option value="2">2厅</option>
-              </select>
-            </div>
-
-            <!-- 卫数 -->
-            <div class="form-group">
-              <label>卫数</label>
-              <select v-model="predictionForm.bathroomCount">
-                <option value="">请选择卫数</option>
-                <option value="1">1卫</option>
-                <option value="2">2卫</option>
-              </select>
-            </div>
-
-            <!-- 房龄 -->
-            <div class="form-group">
-              <label>房龄 (年)</label>
-              <input
-                v-model.number="predictionForm.age"
-                type="number"
-                placeholder="请输入房龄"
-                min="0"
-                max="50"
-              />
-            </div>
-
-            <!-- 朝向评分 -->
-            <div class="form-group">
-              <label>朝向评分 (1-5分)</label>
-              <select v-model="predictionForm.orientationScore">
-                <option value="">请选择朝向评分</option>
-                <option value="1">1分 (北向)</option>
-                <option value="2">2分 (东/西向)</option>
-                <option value="3">3分 (东北/西北)</option>
-                <option value="4">4分 (东南/西南)</option>
-                <option value="5">5分 (南向)</option>
-              </select>
-            </div>
-
-            <!-- 到市中心距离 -->
-            <div class="form-group">
-              <label>到市中心距离 (km)</label>
-              <input
-                v-model.number="predictionForm.distanceToCenter"
-                type="number"
-                placeholder="请输入距离"
-                min="0"
-                max="50"
-                step="0.1"
-              />
-            </div>
-
-            <!-- 经度 -->
-            <div class="form-group">
-              <label>经度 (可选)</label>
-              <input
-                v-model.number="predictionForm.longitude"
-                type="number"
-                placeholder="如：116.4014"
-                step="0.0001"
-              />
-            </div>
-
-            <!-- 纬度 -->
-            <div class="form-group">
-              <label>纬度 (可选)</label>
-              <input
-                v-model.number="predictionForm.latitude"
-                type="number"
-                placeholder="如：39.9263"
-                step="0.0001"
-              />
+            <div class="form-actions">
+              <button @click="predictPrice" class="predict-btn" :disabled="!canPredict || predicting">
+                {{ predicting ? '预测中...' : '开始预测' }}
+              </button>
             </div>
           </div>
-
-          <div class="form-actions">
-            <button @click="predictPrice" class="predict-btn" :disabled="!canPredict || predicting">
-              {{ predicting ? '预测中...' : '开始预测' }}
-            </button>
+          <!-- 右侧结果区 -->
+          <div class="prediction-result-col">
+            <div v-if="apiPredictionResult" class="prediction-result">
+              <div class="result-card">
+                <div class="result-header">
+                  <h3>预测结果</h3>
+                </div>
+                <div class="price-display">
+                  <div class="predicted-price">
+                    ¥{{ Math.round((apiPredictionResult.predictedPricePerSquareMeter / 10000) * predictionForm.area * 10000).toLocaleString() }}
+                  </div>
+                  <div class="price-unit">元</div>
+                </div>
+                <div class="result-details">
+                  <div class="detail-item">
+                    <span class="label">单价:</span>
+                    <span class="value">{{ (apiPredictionResult.predictedPricePerSquareMeter / 10000).toFixed(2) }}万元/㎡</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="label">城市:</span>
+                    <span class="value">{{ apiPredictionResult.city }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="label">模型预测:</span>
+                    <span class="value">zhzharry模型v1.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="predictionError" class="error-message">
+              <div class="error-icon">❌</div>
+              <div class="error-text">{{ predictionError }}</div>
+            </div>
+            <div v-else-if="predicting" class="loading-state">
+              <div class="loading-spinner"></div>
+              <div class="loading-text">正在计算预测结果...</div>
+            </div>
+            <div v-else class="empty-result-hint">
+              <span>请在左侧填写信息后点击“开始预测”</span>
+            </div>
           </div>
-        </div>
-
-        <!-- 预测结果 -->
-        <div v-if="apiPredictionResult" class="prediction-result">
-          <div class="result-card">
-            <div class="result-header">
-              <h3>预测结果</h3>
-            </div>
-
-            <div class="price-display">
-              <div class="predicted-price">
-                ¥{{ Math.round((apiPredictionResult.predictedPricePerSquareMeter / 10000) * predictionForm.area * 10000).toLocaleString() }}
-              </div>
-              <div class="price-unit">元</div>
-            </div>
-
-            <div class="result-details">
-              <div class="detail-item">
-                <span class="label">单价:</span>
-                <span class="value">{{ (apiPredictionResult.predictedPricePerSquareMeter / 10000).toFixed(2) }}万元/㎡</span>
-              </div>
-              <div class="detail-item">
-                <span class="label">城市:</span>
-                <span class="value">{{ apiPredictionResult.city }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="label">模型预测:</span>
-                <span class="value">zhzharry模型v1.0</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 错误提示 -->
-        <div v-if="predictionError" class="error-message">
-          <div class="error-icon">❌</div>
-          <div class="error-text">{{ predictionError }}</div>
-        </div>
-
-        <!-- 加载状态 -->
-        <div v-if="predicting" class="loading-state">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">正在计算预测结果...</div>
         </div>
       </div>
 
@@ -236,106 +208,82 @@
           <h2>贷款计算器</h2>
           <p>计算房贷月供和还款计划</p>
         </div>
-
-        <div class="mortgage-form">
-          <div class="form-grid">
-            <div class="form-group">
-              <label>贷款金额（万元）</label>
-              <input
-                v-model.number="mortgageForm.amount"
-                type="number"
-                placeholder="请输入贷款金额"
-                min="1"
-                step="0.1"
-              />
+        <div class="mortgage-flex">
+          <!-- 左侧表单 -->
+          <div class="mortgage-form mortgage-form-col">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>贷款金额（万元）</label>
+                <input v-model.number="mortgageForm.amount" type="number" placeholder="请输入贷款金额" min="1" step="0.1" />
+              </div>
+              <div class="form-group">
+                <label>年利率（%）</label>
+                <input v-model.number="mortgageForm.annualRate" type="number" placeholder="请输入年利率" min="0" step="0.01" />
+              </div>
+              <div class="form-group">
+                <label>贷款期限（年）</label>
+                <input v-model.number="mortgageForm.years" type="number" placeholder="请输入贷款年限" min="1" max="30" />
+              </div>
+              <div class="form-group">
+                <label>还款方式</label>
+                <select v-model="mortgageForm.repaymentType">
+                  <option value="equal-principal-interest">等额本息</option>
+                  <option value="equal-principal">等额本金</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group">
-              <label>年利率（%）</label>
-              <input
-                v-model.number="mortgageForm.annualRate"
-                type="number"
-                placeholder="请输入年利率"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div class="form-group">
-              <label>贷款期限（年）</label>
-              <input
-                v-model.number="mortgageForm.years"
-                type="number"
-                placeholder="请输入贷款年限"
-                min="1"
-                max="30"
-              />
-            </div>
-            <div class="form-group">
-              <label>还款方式</label>
-              <select v-model="mortgageForm.repaymentType">
-                <option value="equal-principal-interest">等额本息</option>
-                <option value="equal-principal">等额本金</option>
-              </select>
+            <div class="form-actions">
+              <button class="calculate-btn" @click="calculateMortgage" :disabled="!canCalculateMortgage">计算</button>
             </div>
           </div>
-
-          <div class="form-actions">
-            <button
-              class="calculate-btn"
-              @click="calculateMortgage"
-              :disabled="!canCalculateMortgage"
-            >
-              计算
-            </button>
-          </div>
-        </div>
-
-        <!-- 计算结果 -->
-        <div v-if="mortgageResult" class="mortgage-result">
-          <div class="result-cards">
-            <div class="result-card">
-              <div class="card-icon">💰</div>
-              <div class="card-content">
-                <div class="card-value">{{ formatCurrency(mortgageResult.monthlyPayment) }}</div>
-                <div class="card-label">月均还款</div>
+          <!-- 右侧结果区 -->
+          <div class="mortgage-result-col">
+            <div v-if="mortgageResult" class="mortgage-result">
+              <div class="result-cards">
+                <div class="result-card">
+                  <div class="card-icon">💰</div>
+                  <div class="card-content">
+                    <div class="card-value">{{ formatCurrency(mortgageResult.monthlyPayment) }}</div>
+                    <div class="card-label">月均还款</div>
+                  </div>
+                </div>
+                <div class="result-card">
+                  <div class="card-icon">📊</div>
+                  <div class="card-content">
+                    <div class="card-value">{{ formatCurrency(mortgageResult.totalInterest) }}</div>
+                    <div class="card-label">总利息</div>
+                  </div>
+                </div>
+                <div class="result-card">
+                  <div class="card-icon">🏦</div>
+                  <div class="card-content">
+                    <div class="card-value">{{ formatCurrency(mortgageResult.totalPayment) }}</div>
+                    <div class="card-label">总还款</div>
+                  </div>
+                </div>
+              </div>
+              <div class="repayment-plan">
+                <h4>还款计划（前12个月）</h4>
+                <div class="plan-table">
+                  <div class="table-header">
+                    <div class="table-cell">期数</div>
+                    <div class="table-cell">月供</div>
+                    <div class="table-cell">本金</div>
+                    <div class="table-cell">利息</div>
+                    <div class="table-cell">剩余本金</div>
+                  </div>
+                  <div v-for="item in mortgageResult.schedule.slice(0, 12)" :key="item.period" class="table-row">
+                    <div class="table-cell">{{ item.period }}</div>
+                    <div class="table-cell">{{ formatCurrency(item.payment) }}</div>
+                    <div class="table-cell">{{ formatCurrency(item.principal) }}</div>
+                    <div class="table-cell">{{ formatCurrency(item.interest) }}</div>
+                    <div class="table-cell">{{ formatCurrency(item.remainingPrincipal) }}</div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="result-card">
-              <div class="card-icon">📊</div>
-              <div class="card-content">
-                <div class="card-value">{{ formatCurrency(mortgageResult.totalInterest) }}</div>
-                <div class="card-label">总利息</div>
-              </div>
-            </div>
-            <div class="result-card">
-              <div class="card-icon">🏦</div>
-              <div class="card-content">
-                <div class="card-value">{{ formatCurrency(mortgageResult.totalPayment) }}</div>
-                <div class="card-label">总还款</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="repayment-plan">
-            <h4>还款计划（前12个月）</h4>
-            <div class="plan-table">
-              <div class="table-header">
-                <div class="table-cell">期数</div>
-                <div class="table-cell">月供</div>
-                <div class="table-cell">本金</div>
-                <div class="table-cell">利息</div>
-                <div class="table-cell">剩余本金</div>
-              </div>
-              <div
-                v-for="item in mortgageResult.schedule.slice(0, 12)"
-                :key="item.period"
-                class="table-row"
-              >
-                <div class="table-cell">{{ item.period }}</div>
-                <div class="table-cell">{{ formatCurrency(item.payment) }}</div>
-                <div class="table-cell">{{ formatCurrency(item.principal) }}</div>
-                <div class="table-cell">{{ formatCurrency(item.interest) }}</div>
-                <div class="table-cell">{{ formatCurrency(item.remainingPrincipal) }}</div>
-              </div>
+            <div v-else class="empty-result-hint">
+              <span>请在左侧填写信息后点击“计算”</span>
             </div>
           </div>
         </div>
@@ -451,6 +399,84 @@
     </div>
   </div>
 </template>
+
+<style scoped>
+.prediction-flex, .mortgage-flex {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+}
+.prediction-form-col, .mortgage-form-col {
+  flex: 0 0 420px;
+  min-width: 360px;
+  max-width: 450px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.7), rgba(22, 33, 62, 0.8));
+  padding: 32px;
+  border-radius: 20px;
+  border: 2px solid rgba(212, 175, 55, 0.25);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(212, 175, 55, 0.1);
+  backdrop-filter: blur(15px);
+  position: relative;
+  overflow: hidden;
+}
+
+.prediction-form-col::before, .mortgage-form-col::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ffd700, transparent);
+  animation: formShimmer 3s ease-in-out infinite;
+}
+
+@keyframes formShimmer {
+  0%, 100% { left: -100%; }
+  50% { left: 100%; }
+}
+.prediction-result-col, .mortgage-result-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  background: linear-gradient(135deg, rgba(22, 33, 62, 0.5), rgba(26, 26, 46, 0.6));
+  padding: 32px;
+  border-radius: 20px;
+  border: 2px solid rgba(212, 175, 55, 0.2);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(212, 175, 55, 0.08);
+  backdrop-filter: blur(12px);
+}
+.empty-result-hint {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(212, 175, 55, 0.6);
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  background: transparent;
+  border-radius: 0;
+  margin-top: 0;
+  box-shadow: none;
+}
+@media (max-width: 900px) {
+  .prediction-flex, .mortgage-flex {
+    flex-direction: column;
+    gap: 24px;
+  }
+  .prediction-form-col, .mortgage-form-col, .prediction-result-col, .mortgage-result-col {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+</style>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -1190,34 +1216,126 @@ watch(activeTool, (newValue) => {
 <style scoped>
 .tools-page {
   min-height: 100vh;
-  background: linear-gradient(to bottom, #f7fafc 0%, #edf2f7 100%);
+  background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0f1419 100%);
   padding-bottom: 70px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 奢华背景装饰 */
+.luxury-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.floating-particle {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.2), transparent 70%);
+  animation: particleFloat 20s ease-in-out infinite;
+}
+
+.p-1 {
+  width: 300px;
+  height: 300px;
+  top: -100px;
+  right: -80px;
+  animation-delay: 0s;
+}
+
+.p-2 {
+  width: 250px;
+  height: 250px;
+  bottom: -80px;
+  left: -60px;
+  animation-delay: 7s;
+}
+
+.p-3 {
+  width: 200px;
+  height: 200px;
+  top: 50%;
+  left: 30%;
+  animation-delay: 14s;
+}
+
+@keyframes particleFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(40px, -40px) scale(1.2);
+    opacity: 0.5;
+  }
+}
+
+.radial-glow {
+  position: absolute;
+  top: 20%;
+  right: 10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.1), transparent 60%);
+  filter: blur(60px);
+  animation: glowPulse 10s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.1); }
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 32px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 20px 40px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.98) 100%);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(20px);
   gap: 40px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.logo-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 2px 8px rgba(212, 175, 55, 0.5));
+  animation: iconFloat 3s ease-in-out infinite;
+}
+
+@keyframes iconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.logo-text {
   font-size: 24px;
   font-weight: 800;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffd700 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-  white-space: nowrap;
+  letter-spacing: 1px;
 }
 
 .logo:hover {
@@ -1226,9 +1344,9 @@ watch(activeTool, (newValue) => {
 
 .top-nav {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   flex: 1;
-  max-width: 400px;
+  max-width: 500px;
 }
 
 .nav-link {
@@ -1237,27 +1355,32 @@ watch(activeTool, (newValue) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: transparent;
-  border: none;
+  border: 1px solid rgba(212, 175, 55, 0.2);
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
-  color: #718096;
+  color: rgba(212, 175, 55, 0.7);
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
 }
 
 .nav-link:hover {
-  background: #f7fafc;
-  color: #2d3748;
+  background: rgba(212, 175, 55, 0.1);
+  color: #ffd700;
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
 }
 
 .nav-link.active {
-  color: white;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  color: #0f1419;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  border-color: #d4af37;
+  box-shadow:
+    0 4px 16px rgba(212, 175, 55, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .nav-icon {
@@ -1270,64 +1393,97 @@ watch(activeTool, (newValue) => {
 }
 
 .icon-btn {
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-  border: 2px solid #e2e8f0;
+  background: rgba(26, 26, 46, 0.8);
+  border: 2px solid rgba(212, 175, 55, 0.3);
   font-size: 20px;
   cursor: pointer;
-  padding: 10px;
+  padding: 12px;
   border-radius: 12px;
   transition: all 0.3s ease;
+  color: #d4af37;
 }
 
 .icon-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-  border-color: #667eea;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.4);
+  border-color: #d4af37;
+  background: rgba(212, 175, 55, 0.1);
 }
 
 .tools-nav {
   display: flex;
-  background: white;
-  padding: 8px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  gap: 8px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.95) 100%);
+  padding: 12px 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  gap: 12px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .nav-tab {
   flex: 1;
-  padding: 14px 20px;
+  padding: 16px 24px;
   background: transparent;
-  border: none;
+  border: 1px solid rgba(212, 175, 55, 0.2);
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
-  color: #718096;
+  color: rgba(212, 175, 55, 0.7);
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
 }
 
 .nav-tab:hover {
-  background: #f7fafc;
-  color: #2d3748;
+  background: rgba(212, 175, 55, 0.1);
+  color: #ffd700;
+  border-color: rgba(212, 175, 55, 0.4);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
 }
 
 .nav-tab.active {
-  color: white;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  color: #0f1419;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  border-color: #d4af37;
+  box-shadow:
+    0 4px 16px rgba(212, 175, 55, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .tools-content {
-  padding: 24px;
+  padding: 32px 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .tool-section {
-  background: white;
-  border-radius: 20px;
-  padding: 32px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.95) 100%);
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(212, 175, 55, 0.2),
+    inset 0 1px 0 rgba(212, 175, 55, 0.1);
   animation: slideUp 0.5s ease;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d4af37, transparent);
+  animation: cardShimmer 4s ease-in-out infinite;
+}
+
+@keyframes cardShimmer {
+  0%, 100% { left: -100%; }
+  50% { left: 100%; }
 }
 
 @keyframes slideUp {
@@ -1343,28 +1499,29 @@ watch(activeTool, (newValue) => {
 
 .section-header {
   text-align: center;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
 }
 
 .section-header h2 {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 800;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffd700 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  letter-spacing: 1px;
 }
 
 .section-header p {
-  color: #718096;
+  color: rgba(212, 175, 55, 0.8);
   font-size: 15px;
   font-weight: 500;
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr;
   gap: 20px;
   margin-bottom: 32px;
 }
@@ -1372,38 +1529,64 @@ watch(activeTool, (newValue) => {
 .form-group {
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .form-group label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #2d3748;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd700;
   margin-bottom: 10px;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-group label::before {
+  content: '▸';
+  color: #d4af37;
+  font-size: 12px;
 }
 
 .form-group input,
 .form-group select {
   padding: 14px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 10px;
   font-size: 15px;
-  transition: all 0.3s ease;
-  background: #f7fafc;
-  color: #2d3748;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, rgba(15, 20, 25, 0.9), rgba(20, 25, 30, 0.85));
+  color: #ffd700;
+  font-weight: 500;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.3),
+    0 1px 2px rgba(212, 175, 55, 0.1);
+}
+
+.form-group input:hover,
+.form-group select:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.3),
+    0 2px 8px rgba(212, 175, 55, 0.2);
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #667eea;
-  background: white;
-  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  border-color: #ffd700;
+  background: linear-gradient(135deg, rgba(15, 20, 25, 0.95), rgba(20, 25, 30, 0.9));
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.4),
+    0 0 0 3px rgba(212, 175, 55, 0.25),
+    0 4px 12px rgba(212, 175, 55, 0.3);
   transform: translateY(-1px);
 }
 
 .form-group input::placeholder {
-  color: #a0aec0;
+  color: rgba(212, 175, 55, 0.5);
 }
 
 .form-actions {
@@ -1412,18 +1595,30 @@ watch(activeTool, (newValue) => {
 
 .predict-btn,
 .calculate-btn {
-  padding: 16px 48px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  width: 100%;
+  padding: 18px 32px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffd700 100%);
+  background-size: 200% 100%;
+  color: #0f1419;
   border: none;
-  border-radius: 14px;
+  border-radius: 12px;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 8px 24px rgba(212, 175, 55, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   position: relative;
   overflow: hidden;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  animation: buttonGlow 2s ease-in-out infinite;
+}
+
+@keyframes buttonGlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 .predict-btn::before,
@@ -1445,36 +1640,54 @@ watch(activeTool, (newValue) => {
 
 .predict-btn:disabled,
 .calculate-btn:disabled {
-  background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.3), rgba(212, 175, 55, 0.2));
   cursor: not-allowed;
   box-shadow: none;
+  opacity: 0.5;
 }
 
 .predict-btn:hover:not(:disabled),
 .calculate-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(212, 175, 55, 0.7);
 }
 
 .predict-btn:active:not(:disabled),
 .calculate-btn:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(-1px);
 }
 
 /* 预测结果样式 */
 .prediction-result {
-  margin-top: 36px;
+  margin-top: 40px;
 }
 
 .result-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 32px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(255, 215, 0, 0.12));
+  backdrop-filter: blur(12px);
+  border: 2px solid rgba(212, 175, 55, 0.35);
+  color: #ffd700;
+  padding: 40px;
   border-radius: 20px;
-  margin-bottom: 28px;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  margin-bottom: 0;
+  box-shadow:
+    0 16px 48px rgba(212, 175, 55, 0.4),
+    inset 0 2px 0 rgba(212, 175, 55, 0.25),
+    0 0 60px rgba(212, 175, 55, 0.15);
   position: relative;
   overflow: hidden;
+  animation: resultFadeIn 0.5s ease-out;
+}
+
+@keyframes resultFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .result-card::before {
@@ -1484,27 +1697,29 @@ watch(activeTool, (newValue) => {
   right: -50%;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent);
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.15), transparent);
 }
 
 .result-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   position: relative;
   z-index: 1;
 }
 
 .result-header h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
+  color: #ffd700;
+  letter-spacing: 0.5px;
 }
 
 .confidence {
-  background: rgba(255, 255, 255, 0.25);
-  padding: 8px 16px;
+  background: rgba(212, 175, 55, 0.3);
+  padding: 10px 18px;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
@@ -1519,10 +1734,21 @@ watch(activeTool, (newValue) => {
 }
 
 .predicted-price {
-  font-size: 48px;
+  font-size: 56px;
   font-weight: 900;
-  margin-bottom: 8px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #ffd700 0%, #fff 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 4px 16px rgba(212, 175, 55, 0.5);
+  letter-spacing: -1px;
+  animation: priceShine 3s ease-in-out infinite;
+}
+
+@keyframes priceShine {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
 }
 
 .price-unit {
@@ -1570,14 +1796,18 @@ watch(activeTool, (newValue) => {
 
 /* 趋势图样式 */
 .trend-chart {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.6), rgba(22, 33, 62, 0.7));
   padding: 20px;
-  border-radius: 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .trend-chart h4 {
   margin: 0 0 16px 0;
-  color: #333;
+  color: #ffd700;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .chart-container {
@@ -1586,10 +1816,11 @@ watch(activeTool, (newValue) => {
 }
 
 .chart-placeholder {
-  background: white;
-  border-radius: 8px;
+  background: rgba(15, 20, 25, 0.5);
+  border-radius: 12px;
   padding: 16px;
   height: 100%;
+  border: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .chart-bars {
@@ -1601,10 +1832,11 @@ watch(activeTool, (newValue) => {
 
 .chart-bar {
   width: 30px;
-  background: linear-gradient(to top, #007bff, #66b3ff);
+  background: linear-gradient(to top, #d4af37, #ffd700);
   border-radius: 4px 4px 0 0;
   position: relative;
   transition: height 0.3s;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
 }
 
 .bar-value {
@@ -1614,6 +1846,8 @@ watch(activeTool, (newValue) => {
   transform: translateX(-50%);
   font-size: 10px;
   white-space: nowrap;
+  color: #ffd700;
+  font-weight: 600;
 }
 
 .bar-label {
@@ -1622,7 +1856,8 @@ watch(activeTool, (newValue) => {
   left: 50%;
   transform: translateX(-50%);
   font-size: 10px;
-  color: #666;
+  color: rgba(212, 175, 55, 0.7);
+  font-weight: 500;
 }
 
 .chart-legend {
@@ -1636,21 +1871,23 @@ watch(activeTool, (newValue) => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #666;
+  color: rgba(212, 175, 55, 0.8);
+  font-weight: 500;
 }
 
 .legend-color {
   width: 12px;
   height: 12px;
   border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .legend-color.historical {
-  background: #007bff;
+  background: #d4af37;
 }
 
 .legend-color.predicted {
-  background: #52c41a;
+  background: #ffd700;
 }
 
 /* 贷款计算结果样式 */
@@ -1666,29 +1903,31 @@ watch(activeTool, (newValue) => {
 }
 
 .result-cards .result-card {
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-  border: 2px solid #e2e8f0;
-  color: #2d3748;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(255, 215, 0, 0.1));
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  color: #ffd700;
   padding: 24px;
   border-radius: 16px;
   display: flex;
   align-items: center;
   gap: 16px;
   transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
 }
 
 .result-cards .result-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
-  border-color: #667eea;
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.4);
+  border-color: #d4af37;
 }
 
 .result-cards .card-icon {
   font-size: 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  filter: drop-shadow(0 2px 4px rgba(212, 175, 55, 0.3));
 }
 
 .result-cards .card-content {
@@ -1698,34 +1937,42 @@ watch(activeTool, (newValue) => {
 .result-cards .card-value {
   font-size: 24px;
   font-weight: 800;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin-bottom: 6px;
+  text-shadow: 0 1px 2px rgba(212, 175, 55, 0.2);
 }
 
 .result-cards .card-label {
   font-size: 13px;
-  color: #718096;
+  color: rgba(212, 175, 55, 0.8);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .repayment-plan {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.5), rgba(22, 33, 62, 0.6));
   padding: 20px;
-  border-radius: 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .repayment-plan h4 {
   margin: 0 0 16px 0;
-  color: #333;
+  color: #ffd700;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .plan-table {
-  background: white;
-  border-radius: 8px;
+  background: rgba(15, 20, 25, 0.6);
+  border-radius: 12px;
   overflow: hidden;
+  border: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .table-header,
@@ -1736,8 +1983,9 @@ watch(activeTool, (newValue) => {
 }
 
 .table-header {
-  background: #007bff;
-  color: white;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
+  font-weight: 700;
 }
 
 .table-cell {
@@ -1747,28 +1995,30 @@ watch(activeTool, (newValue) => {
 }
 
 .table-row {
-  background: white;
+  background: rgba(26, 26, 46, 0.4);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
 }
 
 .table-row:nth-child(even) {
-  background: #f8f9fa;
+  background: rgba(22, 33, 62, 0.4);
 }
 
 .table-row .table-cell {
-  color: #333;
+  color: rgba(212, 175, 55, 0.9);
 }
 
 /* 热力图样式 */
 .heatmap-controls {
   display: flex;
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 24px;
+  margin-bottom: 28px;
   flex-wrap: wrap;
   align-items: flex-end;
-  padding: 20px;
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  padding: 24px;
+  background: rgba(26, 26, 46, 0.6);
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .control-group {
@@ -1780,23 +2030,27 @@ watch(activeTool, (newValue) => {
 .control-group label {
   font-size: 14px;
   font-weight: 600;
-  color: #2d3748;
+  color: #d4af37;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .control-group select,
 .control-group input[type="range"] {
-  padding: 10px 14px;
-  border: 2px solid #e2e8f0;
+  padding: 12px 16px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
   border-radius: 10px;
   font-size: 14px;
   outline: none;
   transition: all 0.3s ease;
-  background: white;
+  background: rgba(15, 20, 25, 0.8);
+  color: #ffd700;
 }
 
 .control-group select:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #d4af37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+  background: rgba(15, 20, 25, 0.9);
 }
 
 .control-group input[type="range"] {
@@ -1804,50 +2058,60 @@ watch(activeTool, (newValue) => {
 }
 
 .refresh-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
   border: none;
-  padding: 10px 20px;
+  padding: 12px 24px;
   border-radius: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
   transition: all 0.3s ease;
-  height: 42px;
-  font-weight: 600;
+  height: 44px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+  letter-spacing: 0.5px;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .refresh-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6);
 }
 
 /* 高德地图容器 */
 .amap-wrapper {
   position: relative;
-  background: white;
-  border-radius: 8px;
+  background: rgba(26, 26, 46, 0.8);
+  border-radius: 16px;
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
 }
 
 .amap-container {
   width: 100%;
-  height: 500px;
+  height: 550px;
+  border-radius: 14px;
 }
 
 /* 地图图例 */
 .amap-legend {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
-  background: white;
-  padding: 16px;
-  border-radius: 8px;
+  bottom: 24px;
+  right: 24px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(22, 33, 62, 0.98));
+  padding: 20px;
+  border-radius: 12px;
   margin-bottom: 8px;
-  color: #333;
+  color: #ffd700;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .legend-items {
@@ -1879,12 +2143,13 @@ watch(activeTool, (newValue) => {
 }
 
 .loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  width: 60px;
+  height: 60px;
+  border: 5px solid rgba(212, 175, 55, 0.2);
+  border-top-color: #ffd700;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
 }
 
 @keyframes spin {
@@ -1895,17 +2160,23 @@ watch(activeTool, (newValue) => {
 
 /* 统计信息 */
 .heatmap-stats {
-  background: white;
-  padding: 28px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.9));
+  padding: 32px;
   border-radius: 16px;
-  border: 2px solid #e2e8f0;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
 }
 
 .heatmap-stats h4 {
-  margin: 0 0 20px 0;
-  font-size: 18px;
+  margin: 0 0 24px 0;
+  font-size: 20px;
   font-weight: 700;
-  color: #2d3748;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.5px;
 }
 
 .stats-grid {
@@ -1941,50 +2212,59 @@ watch(activeTool, (newValue) => {
 .stat {
   text-align: center;
   padding: 20px;
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(255, 215, 0, 0.08));
   border-radius: 12px;
   transition: all 0.3s ease;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .stat:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+  border-color: rgba(212, 175, 55, 0.4);
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: 800;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin-bottom: 6px;
+  text-shadow: 0 1px 2px rgba(212, 175, 55, 0.2);
 }
 
 .stat-label {
   font-size: 13px;
-  color: #718096;
+  color: rgba(212, 175, 55, 0.8);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .error-message {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.15), rgba(255, 77, 79, 0.1));
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 12px;
   padding: 16px;
   margin-top: 20px;
+  backdrop-filter: blur(10px);
 }
 
 .error-icon {
   font-size: 20px;
+  color: #ff6b6b;
 }
 
 .error-text {
-  color: #ff4d4f;
+  color: #ff8787;
   font-size: 14px;
+  font-weight: 500;
 }
 
 .loading-state {
@@ -1994,17 +2274,20 @@ watch(activeTool, (newValue) => {
   gap: 12px;
   margin-top: 30px;
   padding: 30px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.6), rgba(22, 33, 62, 0.7));
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #007bff;
+  border: 3px solid rgba(212, 175, 55, 0.2);
+  border-top: 3px solid #ffd700;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
 }
 
 @keyframes spin {
@@ -2013,7 +2296,8 @@ watch(activeTool, (newValue) => {
 }
 
 .loading-text {
-  color: #666;
+  color: rgba(212, 175, 55, 0.8);
   font-size: 14px;
+  font-weight: 500;
 }
 </style>

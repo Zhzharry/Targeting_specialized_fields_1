@@ -17,6 +17,7 @@ export interface RecommendationItem {
   cover: string
   totalPrice?: number
   tags?: string[]
+  recommendationScore?: number
 }
 
 export interface OthersAlsoViewedResponse {

@@ -62,7 +62,7 @@
           <div class="location-details">
             <div class="detail-row">
               <span class="label">小区:</span>
-              <span class="value">{{ property.communityName || '暂无' }}</span>
+              <span class="value">{{ communityName }}</span>
             </div>
             <div class="detail-row">
               <span class="label">地址:</span>
@@ -110,13 +110,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import type { PropertyDetail } from '@/types/api.types'
+import { ref, watch, computed } from 'vue'
+import type { PropertyDetail, PopularProperty } from '@/types/api.types'
 import { useAuthStore } from '@/stores/auth.store'
 
 interface Props {
   visible: boolean
-  property: PropertyDetail | null
+  property: PropertyDetail | PopularProperty | null
 }
 
 const props = defineProps<Props>()
@@ -124,11 +124,24 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   'update:visible': [value: boolean]
   'favorite': [propertyId: number]
-  'purchase': [property: PropertyDetail]
+  'purchase': [property: PropertyDetail | PopularProperty]
 }>()
 
 const authStore = useAuthStore()
 const isFavorited = ref(false)
+
+// 获取小区名称（兼容PropertyDetail和PopularProperty）
+const communityName = computed(() => {
+  if (!props.property) return '暂无'
+  const property = props.property
+  if ('communityName' in property) {
+    return property.communityName || '暂无'
+  }
+  if ('community_name' in property) {
+    return property.community_name || '暂无'
+  }
+  return '暂无'
+})
 
 // 监听属性变化，检查是否已收藏
 watch(() => props.property, (newProperty) => {
@@ -186,8 +199,13 @@ const formatDate = (dateString?: string) => {
 }
 
 const getPropertyImage = () => {
-  // 可以使用picsum.photos生成基于propertyId的图片，或者使用占位符
-  return `https://picsum.photos/seed/property-${props.property?.propertyId || 'default'}/600/400`
+  if (!props.property) return ''
+  // 优先使用接口返回的cover图片
+  const property = props.property
+  if ('cover' in property) {
+    return property.cover || `https://picsum.photos/seed/property-${property.propertyId}/600/400`
+  }
+  return `https://picsum.photos/seed/property-${property.propertyId}/600/400`
 }
 </script>
 

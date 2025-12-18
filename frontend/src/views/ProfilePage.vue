@@ -1,8 +1,19 @@
 <template>
   <div class="profile-container">
+    <!-- 豪华背景装饰 -->
+    <div class="luxury-bg">
+      <div class="floating-particle p-1"></div>
+      <div class="floating-particle p-2"></div>
+      <div class="floating-particle p-3"></div>
+      <div class="radial-glow"></div>
+    </div>
+
     <!-- 顶部导航栏 -->
     <header class="header">
-      <div class="logo" @click="$router.push('/search')">房产平台</div>
+      <div class="logo" @click="$router.push('/search')">
+        <span class="logo-icon">🏛️</span>
+        <span class="logo-text">尊贵房产</span>
+      </div>
       <nav class="top-nav">
         <button class="nav-link" @click="$router.push('/search')">
           <span class="nav-icon">🔍</span>
@@ -26,37 +37,47 @@
 
     <!-- 用户信息卡片 -->
     <div class="user-card">
-      <div class="user-avatar">
-        <img :src="userInfo.avatar" alt="头像" class="avatar-img" />
-        <div class="avatar-edit" @click="editAvatar">📷</div>
+      <div class="user-avatar-container">
+        <div class="avatar-glow"></div>
+        <div class="user-avatar">
+          <img :src="userInfo.avatar" alt="头像" class="avatar-img" />
+          <div class="avatar-edit" @click="editAvatar">
+            <span>📷</span>
+          </div>
+        </div>
       </div>
       <div class="user-info">
         <h2 class="username">{{ userInfo.username }}</h2>
         <p class="user-desc">{{ userInfo.bio }}</p>
         <div class="user-tags">
-          <span class="user-tag">{{ userInfo.phone }}</span>
-          <span class="user-tag"> {{ userInfo.location }}</span>
+          <span class="user-tag">📱 {{ userInfo.phone }}</span>
+          <span class="user-tag">📍 {{ userInfo.location }}</span>
         </div>
       </div>
     </div>
 
     <!-- 数据统计 -->
     <div class="stats-grid">
-    <div class="stat-item" @click="fetchFavoritesData">
-        <div class="stat-icon">❤️</div>
-
+      <div class="stat-item" @click="fetchFavoritesData">
+        <div class="stat-icon-wrapper">
+          <div class="stat-icon">❤️</div>
+        </div>
         <div class="stat-label">我的收藏</div>
+        <div class="stat-shine"></div>
       </div>
       <div class="stat-item" @click="fetchHistoryData">
-
-        <div class="stat-icon">🕒</div>
-
+        <div class="stat-icon-wrapper">
+          <div class="stat-icon">🕒</div>
+        </div>
         <div class="stat-label">浏览记录</div>
+        <div class="stat-shine"></div>
       </div>
       <div class="stat-item" @click="showPreferences = true">
-        <div class="stat-icon">⭐</div>
-
+        <div class="stat-icon-wrapper">
+          <div class="stat-icon">⭐</div>
+        </div>
         <div class="stat-label">偏好设置</div>
+        <div class="stat-shine"></div>
       </div>
     </div>
 
@@ -1211,26 +1232,79 @@ const handlePurchase = (property: PropertyDetail) => {
 
 .profile-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0f1419 100%);
   padding-bottom: 80px;
   position: relative;
+  overflow-x: hidden;
 }
 
-.profile-container::before {
-  content: '';
+/* 豪华背景装饰 */
+.luxury-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.floating-particle {
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: moveBackground 20s linear infinite;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.2), transparent 70%);
+  animation: particleFloat 20s ease-in-out infinite;
 }
 
-@keyframes moveBackground {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(50px, 50px); }
+.p-1 {
+  width: 300px;
+  height: 300px;
+  top: -100px;
+  right: -80px;
+  animation-delay: 0s;
+}
+
+.p-2 {
+  width: 250px;
+  height: 250px;
+  bottom: -80px;
+  left: -60px;
+  animation-delay: 7s;
+}
+
+.p-3 {
+  width: 200px;
+  height: 200px;
+  top: 50%;
+  left: 30%;
+  animation-delay: 14s;
+}
+
+@keyframes particleFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(40px, -40px) scale(1.2);
+    opacity: 0.5;
+  }
+}
+
+.radial-glow {
+  position: absolute;
+  top: 20%;
+  right: 10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.1), transparent 60%);
+  filter: blur(60px);
+  animation: glowPulse 10s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.1); }
 }
 
 /* 导航头部 */
@@ -1238,26 +1312,47 @@ const handlePurchase = (property: PropertyDetail) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 32px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 20px 40px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.98) 100%);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(20px);
   gap: 40px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.logo-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 2px 8px rgba(212, 175, 55, 0.5));
+  animation: iconFloat 3s ease-in-out infinite;
+}
+
+@keyframes iconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.logo-text {
   font-size: 24px;
   font-weight: 800;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffd700 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-  white-space: nowrap;
+  letter-spacing: 1px;
 }
 
 .logo:hover {
@@ -1266,9 +1361,9 @@ const handlePurchase = (property: PropertyDetail) => {
 
 .top-nav {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   flex: 1;
-  max-width: 400px;
+  max-width: 500px;
 }
 
 .nav-link {
@@ -1277,27 +1372,32 @@ const handlePurchase = (property: PropertyDetail) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: transparent;
-  border: none;
+  border: 1px solid rgba(212, 175, 55, 0.2);
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
-  color: #718096;
+  color: rgba(212, 175, 55, 0.7);
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
 }
 
 .nav-link:hover {
-  background: #f7fafc;
-  color: #2d3748;
+  background: rgba(212, 175, 55, 0.1);
+  color: #ffd700;
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
 }
 
 .nav-link.active {
-  color: white;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  color: #0f1419;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  border-color: #d4af37;
+  box-shadow:
+    0 4px 16px rgba(212, 175, 55, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .nav-icon {
@@ -1310,34 +1410,57 @@ const handlePurchase = (property: PropertyDetail) => {
 }
 
 .icon-btn {
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-  border: 2px solid #e2e8f0;
+  background: rgba(26, 26, 46, 0.8);
+  border: 2px solid rgba(212, 175, 55, 0.3);
   font-size: 20px;
   cursor: pointer;
-  padding: 10px;
+  padding: 12px;
   border-radius: 12px;
   transition: all 0.3s ease;
+  color: #d4af37;
 }
 
 .icon-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-  border-color: #667eea;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.4);
+  border-color: #d4af37;
+  background: rgba(212, 175, 55, 0.1);
 }
 
 /* 用户卡片 */
 .user-card {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.98);
-  margin: 24px;
-  padding: 28px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.95) 100%);
+  margin: 32px 24px;
+  padding: 40px;
   border-radius: 24px;
   backdrop-filter: blur(20px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(212, 175, 55, 0.2),
+    inset 0 1px 0 rgba(212, 175, 55, 0.1);
   position: relative;
   z-index: 1;
   animation: slideUp 0.5s ease-out;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  overflow: hidden;
+}
+
+.user-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d4af37, transparent);
+  animation: cardShimmer 4s ease-in-out infinite;
+}
+
+@keyframes cardShimmer {
+  0%, 100% { left: -100%; }
+  50% { left: 100%; }
 }
 
 @keyframes slideUp {
@@ -1351,40 +1474,65 @@ const handlePurchase = (property: PropertyDetail) => {
   }
 }
 
+.user-avatar-container {
+  position: relative;
+  margin-right: 24px;
+}
+
+.avatar-glow {
+  position: absolute;
+  inset: -10px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.3), transparent 70%);
+  border-radius: 50%;
+  animation: avatarGlow 3s ease-in-out infinite;
+  filter: blur(15px);
+}
+
+@keyframes avatarGlow {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
+}
+
 .user-avatar {
   position: relative;
-  margin-right: 20px;
+  z-index: 1;
 }
 
 .avatar-img {
-  width: 85px;
-  height: 85px;
+  width: 110px;
+  height: 110px;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid white;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+  box-shadow:
+    0 10px 30px rgba(212, 175, 55, 0.3),
+    0 0 0 4px rgba(26, 26, 46, 0.9),
+    0 0 0 6px rgba(212, 175, 55, 0.5);
+  border: 3px solid #d4af37;
 }
 
 .avatar-edit {
   position: absolute;
   bottom: 2px;
   right: 2px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  width: 28px;
-  height: 28px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s ease;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.5);
+  transition: all 0.3s ease;
+  border: 2px solid #0f1419;
+  z-index: 2;
 }
 
 .avatar-edit:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.7);
 }
 
 .user-info {
@@ -1392,16 +1540,20 @@ const handlePurchase = (property: PropertyDetail) => {
 }
 
 .username {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
-  margin-bottom: 8px;
-  color: #2d3748;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.5px;
 }
 
 .user-desc {
-  color: #718096;
+  color: rgba(212, 175, 55, 0.7);
   font-size: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   font-weight: 500;
 }
 
@@ -1413,89 +1565,137 @@ const handlePurchase = (property: PropertyDetail) => {
 
 .user-tag {
   font-size: 12px;
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
-  padding: 4px 12px;
+  color: #d4af37;
+  background: rgba(212, 175, 55, 0.15);
+  padding: 6px 14px;
   border-radius: 12px;
   font-weight: 600;
+  border: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 .edit-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
   border: none;
-  padding: 10px 20px;
+  padding: 12px 24px;
   border-radius: 12px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.4);
   transition: all 0.3s ease;
+  letter-spacing: 0.5px;
 }
 
 .edit-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 24px rgba(212, 175, 55, 0.6);
 }
 
 /* 数据统计 */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin: 0 24px 24px;
+  gap: 20px;
+  margin: 0 24px 32px;
   position: relative;
   z-index: 1;
 }
 
 .stat-item {
-  background: rgba(255, 255, 255, 0.98);
-  padding: 20px 16px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.9) 100%);
+  padding: 28px 20px;
   border-radius: 20px;
   text-align: center;
   cursor: pointer;
   backdrop-filter: blur(20px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
   transition: all 0.3s ease;
-  border: 2px solid transparent;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.stat-item:hover::before {
+  left: 100%;
 }
 
 .stat-item:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
-  border-color: #667eea;
+  transform: translateY(-6px);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(212, 175, 55, 0.5),
+    0 0 20px rgba(212, 175, 55, 0.3);
+  border-color: #d4af37;
+}
+
+.stat-icon-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 12px;
 }
 
 .stat-icon {
-  font-size: 32px;
-  margin-bottom: 10px;
+  font-size: 40px;
   display: block;
+  filter: drop-shadow(0 4px 8px rgba(212, 175, 55, 0.3));
+}
+
+.stat-shine {
+  position: absolute;
+  inset: -10px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.2), transparent 60%);
+  filter: blur(10px);
+  animation: statShine 3s ease-in-out infinite;
+}
+
+@keyframes statShine {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.2); }
 }
 
 .stat-number {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 800;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .stat-label {
   font-size: 13px;
-  color: #718096;
+  color: rgba(212, 175, 55, 0.8);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* 功能列表 */
 .function-list {
-  background: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.9) 100%);
   margin: 0 24px;
   border-radius: 20px;
   overflow: hidden;
   backdrop-filter: blur(20px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
+  border: 1px solid rgba(212, 175, 55, 0.2);
   position: relative;
   z-index: 1;
 }
@@ -1505,15 +1705,15 @@ const handlePurchase = (property: PropertyDetail) => {
 }
 
 .list-section:not(:last-child) {
-  border-bottom: 2px solid #f7fafc;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
 }
 
 .list-item {
   display: flex;
   align-items: center;
-  padding: 18px 24px;
+  padding: 20px 28px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   position: relative;
 }
 
@@ -1524,7 +1724,7 @@ const handlePurchase = (property: PropertyDetail) => {
   top: 0;
   height: 100%;
   width: 0;
-  background: linear-gradient(90deg, rgba(102, 126, 234, 0.05), transparent);
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.15), transparent);
   transition: width 0.3s ease;
 }
 
@@ -1533,24 +1733,27 @@ const handlePurchase = (property: PropertyDetail) => {
 }
 
 .list-item:hover {
-  transform: translateX(4px);
+  transform: translateX(6px);
 }
 
 .list-item:active {
-  background: #f7fafc;
+  background: rgba(212, 175, 55, 0.1);
 }
 
 .item-icon {
-  font-size: 24px;
-  margin-right: 18px;
-  width: 28px;
+  font-size: 26px;
+  margin-right: 20px;
+  width: 32px;
   text-align: center;
   position: relative;
   z-index: 1;
+  color: #d4af37;
+  filter: drop-shadow(0 2px 4px rgba(212, 175, 55, 0.3));
 }
 
 .item-icon.logout {
-  color: #f56565;
+  color: #ff6b6b;
+  filter: drop-shadow(0 2px 4px rgba(255, 107, 107, 0.3));
 }
 
 .item-text {
@@ -1561,28 +1764,28 @@ const handlePurchase = (property: PropertyDetail) => {
 
 .item-title {
   font-size: 16px;
-  color: #2d3748;
+  color: #ffd700;
   margin-bottom: 4px;
   font-weight: 600;
 }
 
 .item-desc {
   font-size: 12px;
-  color: #a0aec0;
+  color: rgba(212, 175, 55, 0.6);
   font-weight: 500;
 }
 
 .item-arrow {
-  color: #cbd5e0;
+  color: rgba(212, 175, 55, 0.5);
   font-size: 20px;
   position: relative;
   z-index: 1;
-  transition: transform 0.2s ease;
+  transition: transform 0.3s ease;
 }
 
 .list-item:hover .item-arrow {
-  transform: translateX(4px);
-  color: #667eea;
+  transform: translateX(6px);
+  color: #d4af37;
 }
 
 /* 模态框样式 */
@@ -1592,8 +1795,8 @@ const handlePurchase = (property: PropertyDetail) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1608,14 +1811,17 @@ const handlePurchase = (property: PropertyDetail) => {
 }
 
 .modal-content {
-  background: white;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.98) 0%, rgba(22, 33, 62, 0.98) 100%);
   border-radius: 24px;
   width: 100%;
   max-width: 520px;
   max-height: 85vh;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(212, 175, 55, 0.3);
   animation: slideUpModal 0.3s ease;
+  border: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 @keyframes slideUpModal {
@@ -1633,17 +1839,18 @@ const handlePurchase = (property: PropertyDetail) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px;
-  border-bottom: 2px solid #f7fafc;
+  padding: 28px 24px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .modal-title {
   font-size: 20px;
   font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  letter-spacing: 0.5px;
 }
 
 .modal-actions {
@@ -1653,14 +1860,14 @@ const handlePurchase = (property: PropertyDetail) => {
 }
 
 .close-btn {
-  background: #f7fafc;
-  border: none;
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.3);
   font-size: 26px;
-  color: #a0aec0;
+  color: #d4af37;
   cursor: pointer;
   padding: 6px;
   border-radius: 12px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   width: 36px;
   height: 36px;
   display: flex;
@@ -1669,24 +1876,26 @@ const handlePurchase = (property: PropertyDetail) => {
 }
 
 .close-btn:hover {
-  background: #edf2f7;
-  color: #2d3748;
+  background: rgba(212, 175, 55, 0.2);
+  color: #ffd700;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
 }
 
 .text-btn {
   background: none;
   border: none;
-  color: #667eea;
+  color: #d4af37;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  padding: 8px 12px;
+  padding: 8px 16px;
   border-radius: 8px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .text-btn:hover {
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(212, 175, 55, 0.15);
+  color: #ffd700;
 }
 
 .modal-body {
@@ -1698,10 +1907,11 @@ const handlePurchase = (property: PropertyDetail) => {
 /* 偏好设置样式 */
 .pref-section {
   margin-bottom: 28px;
-  padding: 20px;
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  padding: 24px;
+  background: rgba(26, 26, 46, 0.6);
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .pref-section:last-child {
@@ -1712,7 +1922,8 @@ const handlePurchase = (property: PropertyDetail) => {
   font-size: 16px;
   font-weight: 700;
   margin-bottom: 16px;
-  color: #2d3748;
+  color: #ffd700;
+  letter-spacing: 0.5px;
 }
 
 .price-inputs {
@@ -1728,29 +1939,33 @@ const handlePurchase = (property: PropertyDetail) => {
 .input-group label {
   display: block;
   font-size: 13px;
-  color: #718096;
+  color: rgba(212, 175, 55, 0.8);
   margin-bottom: 8px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .price-input {
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
+  padding: 14px 18px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
   border-radius: 12px;
   font-size: 14px;
-  background: white;
+  background: rgba(15, 20, 25, 0.8);
   transition: all 0.3s ease;
+  color: #ffd700;
 }
 
 .price-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #d4af37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+  background: rgba(15, 20, 25, 0.9);
 }
 
 .separator {
-  color: #718096;
+  color: #d4af37;
   margin-top: 20px;
   font-weight: 700;
   font-size: 18px;
@@ -1759,38 +1974,41 @@ const handlePurchase = (property: PropertyDetail) => {
 .room-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .room-item {
-  padding: 16px 10px;
-  border: 2px solid #e2e8f0;
+  padding: 18px 12px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
   border-radius: 12px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  background: white;
+  background: rgba(15, 20, 25, 0.6);
 }
 
 .room-item:hover {
-  border-color: #cbd5e0;
-  transform: translateY(-2px);
+  border-color: rgba(212, 175, 55, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(212, 175, 55, 0.2);
 }
 
 .room-item.active {
-  border-color: #667eea;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  border-color: #d4af37;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(255, 215, 0, 0.15));
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
 }
 
 .room-icon {
-  font-size: 24px;
+  font-size: 26px;
   margin-bottom: 8px;
   display: block;
+  filter: drop-shadow(0 2px 4px rgba(212, 175, 55, 0.3));
 }
 
 .room-name {
   font-size: 13px;
-  color: #2d3748;
+  color: #ffd700;
   font-weight: 600;
 }
 
@@ -1852,9 +2070,10 @@ const handlePurchase = (property: PropertyDetail) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
+  background-color: rgba(212, 175, 55, 0.2);
   transition: 0.4s;
   border-radius: 24px;
+  border: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 .slider:before {
@@ -1864,13 +2083,15 @@ const handlePurchase = (property: PropertyDetail) => {
   width: 18px;
   left: 3px;
   bottom: 3px;
-  background-color: white;
+  background: linear-gradient(135deg, #ffd700, #d4af37);
   transition: 0.4s;
   border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 input:checked + .slider {
-  background-color: #007bff;
+  background: linear-gradient(135deg, #d4af37, #ffd700);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
 }
 
 input:checked + .slider:before {
@@ -1879,64 +2100,68 @@ input:checked + .slider:before {
 
 .save-btn {
   width: 100%;
-  padding: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  padding: 18px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
   border: none;
   border-radius: 12px;
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   margin-top: 24px;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
   transition: all 0.3s ease;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
 .save-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(212, 175, 55, 0.7);
 }
 
 .save-btn:active {
-  transform: translateY(0);
+  transform: translateY(-1px);
 }
 
 /* 空状态 */
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
-  color: #718096;
+  padding: 80px 20px;
+  color: rgba(212, 175, 55, 0.6);
 }
 
 .empty-icon {
-  font-size: 64px;
-  margin-bottom: 20px;
+  font-size: 72px;
+  margin-bottom: 24px;
   opacity: 0.5;
+  filter: drop-shadow(0 4px 8px rgba(212, 175, 55, 0.2));
 }
 
 .empty-text {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   font-size: 16px;
-  color: #a0aec0;
+  color: rgba(212, 175, 55, 0.7);
   font-weight: 500;
 }
 
 .primary-btn {
-  padding: 14px 28px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
   border: none;
   border-radius: 12px;
   cursor: pointer;
   font-size: 15px;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
   transition: all 0.3s ease;
+  letter-spacing: 0.5px;
 }
 
 .primary-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(212, 175, 55, 0.6);
 }
 
 /* 列表项样式 */
@@ -1944,25 +2169,36 @@ input:checked + .slider:before {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .favorite-item,
 .history-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 12px;
+  background: rgba(26, 26, 46, 0.6);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.favorite-item:hover,
+.history-item:hover {
+  border-color: rgba(212, 175, 55, 0.4);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.2);
+  transform: translateX(4px);
 }
 
 .favorite-img,
 .history-img {
-  width: 60px;
-  height: 60px;
-  border-radius: 8px;
+  width: 70px;
+  height: 70px;
+  border-radius: 10px;
   object-fit: cover;
+  border: 2px solid rgba(212, 175, 55, 0.3);
 }
 
 .favorite-info,
@@ -1972,23 +2208,25 @@ input:checked + .slider:before {
 
 .favorite-title,
 .history-title {
-  font-size: 14px;
-  color: #333;
-  margin-bottom: 4px;
+  font-size: 15px;
+  color: #ffd700;
+  margin-bottom: 6px;
+  font-weight: 600;
 }
 
 .favorite-location,
 .history-location {
   font-size: 12px;
-  color: #666;
-  margin-bottom: 4px;
+  color: rgba(212, 175, 55, 0.6);
+  margin-bottom: 6px;
 }
 
 .favorite-price,
 .history-price {
-  color: #ff4757;
+  color: #ffd700;
   font-weight: bold;
-  font-size: 14px;
+  font-size: 15px;
+  text-shadow: 0 2px 4px rgba(212, 175, 55, 0.3);
 }
 
 .history-meta {
@@ -1998,60 +2236,76 @@ input:checked + .slider:before {
 
 .history-time {
   font-size: 11px;
-  color: #999;
+  color: rgba(212, 175, 55, 0.5);
 }
 
 .remove-btn {
   background: none;
   border: none;
-  font-size: 18px;
-  color: #999;
+  font-size: 20px;
+  color: rgba(212, 175, 55, 0.5);
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
+  transition: all 0.3s ease;
 }
-/* 新增样式，与 LoginPage.vue 保持一致 */
+
+.remove-btn:hover {
+  color: #ff6b6b;
+  transform: scale(1.2);
+}
+/* 新增样式，与奢华主题保持一致 */
 .city-select {
   width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  padding: 14px 18px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 12px;
   font-size: 16px;
-  background: white;
-  transition: border-color 0.3s ease;
+  background: rgba(15, 20, 25, 0.8);
+  color: #ffd700;
+  transition: all 0.3s ease;
 }
 
 .city-select:focus {
   outline: none;
-  border-color: #007bff;
+  border-color: #d4af37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
 }
 
 .range-select {
   flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 10px 14px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 8px;
   font-size: 14px;
-  background: white;
+  background: rgba(15, 20, 25, 0.8);
+  color: #ffd700;
 }
 
 .checkbox-group {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   font-size: 14px;
-  color: #333;
+  color: #d4af37;
+  transition: all 0.3s ease;
+}
+
+.checkbox-label:hover {
+  color: #ffd700;
 }
 
 .checkbox-label input[type="checkbox"] {
-  width: auto;
+  width: 18px;
+  height: 18px;
   margin: 0;
+  accent-color: #d4af37;
 }
 
 /* 调整价格输入框的样式 */
@@ -2069,13 +2323,13 @@ input:checked + .slider:before {
 }
 
 .help-body {
-  padding: 0 20px 20px;
+  padding: 0 24px 24px;
 }
 
 .help-section {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .help-section:last-child {
@@ -2083,25 +2337,26 @@ input:checked + .slider:before {
 }
 
 .help-section-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #007bff;
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #ffd700;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  letter-spacing: 0.5px;
 }
 
 .help-list {
-  padding-left: 20px;
+  padding-left: 24px;
   margin: 0;
 }
 
 .help-list li {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 14px;
-  line-height: 1.5;
-  color: #333;
+  line-height: 1.6;
+  color: rgba(212, 175, 55, 0.9);
 }
 
 .help-list li:last-child {
@@ -2109,44 +2364,48 @@ input:checked + .slider:before {
 }
 
 .help-list li strong {
-  color: #333;
+  color: #ffd700;
 }
 
 .faq-item {
   margin-bottom: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 12px;
-  transition: background-color 0.2s;
+  background: rgba(26, 26, 46, 0.6);
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .faq-item:hover {
-  background: #f0f7ff;
+  background: rgba(26, 26, 46, 0.8);
+  border-color: rgba(212, 175, 55, 0.4);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
 }
 
 .faq-question {
   font-weight: 600;
-  color: #333;
-  margin-bottom: 6px;
+  color: #ffd700;
+  margin-bottom: 8px;
   font-size: 14px;
 }
 
 .faq-answer {
   font-size: 13px;
-  color: #666;
-  line-height: 1.5;
+  color: rgba(212, 175, 55, 0.8);
+  line-height: 1.6;
 }
 
 .contact-info {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 16px;
+  background: rgba(26, 26, 46, 0.6);
+  border-radius: 10px;
+  padding: 20px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .contact-info p {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 14px;
-  color: #333;
+  color: rgba(212, 175, 55, 0.9);
 }
 
 .contact-info p:last-child {
@@ -2154,51 +2413,52 @@ input:checked + .slider:before {
 }
 
 .contact-info strong {
-  color: #333;
-  min-width: 80px;
+  color: #ffd700;
+  min-width: 90px;
   display: inline-block;
+  font-weight: 700;
 }
 
 .help-footer {
   text-align: center;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #f0f0f0;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .version-info {
   font-size: 12px;
-  color: #999;
-  margin-bottom: 4px;
+  color: rgba(212, 175, 55, 0.6);
+  margin-bottom: 6px;
 }
 
 .copyright {
   font-size: 12px;
-  color: #999;
+  color: rgba(212, 175, 55, 0.6);
 }
 
 /* 滚动条样式 */
 .modal-body::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .modal-body::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
+  background: rgba(26, 26, 46, 0.5);
+  border-radius: 4px;
 }
 
 .modal-body::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: rgba(212, 175, 55, 0.4);
+  border-radius: 4px;
 }
 
 .modal-body::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: rgba(212, 175, 55, 0.6);
 }
 
 /* 房源详情弹窗样式 */
 .property-detail-modal {
-  max-width: 600px;
+  max-width: 650px;
   max-height: 90vh;
 }
 
@@ -2214,8 +2474,19 @@ input:checked + .slider:before {
 
 .property-image-section {
   width: 100%;
-  height: 200px;
+  height: 220px;
   overflow: hidden;
+  position: relative;
+}
+
+.property-image-section::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to top, rgba(26, 26, 46, 0.8), transparent);
 }
 
 .property-detail-image {
@@ -2225,99 +2496,106 @@ input:checked + .slider:before {
 }
 
 .property-basic-info {
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 24px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .property-title {
   font-size: 20px;
   font-weight: bold;
-  color: #333;
-  margin-bottom: 10px;
+  color: #ffd700;
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
 }
 
 .property-price {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: bold;
-  color: #ff4757;
-  margin-bottom: 5px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
 }
 
 .property-community {
   font-size: 14px;
-  color: #666;
+  color: rgba(212, 175, 55, 0.7);
 }
 
 .property-details {
-  padding: 20px;
+  padding: 24px;
   flex: 1;
   overflow-y: auto;
 }
 
 .detail-row {
   display: flex;
-  margin-bottom: 15px;
+  margin-bottom: 18px;
 }
 
 .detail-label {
   font-weight: bold;
-  width: 80px;
-  color: #333;
+  width: 90px;
+  color: #ffd700;
 }
 
 .detail-value {
   flex: 1;
-  color: #666;
+  color: rgba(212, 175, 55, 0.8);
 }
 
 .actions-section {
   display: flex;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #f0f0f0;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .action-button {
   flex: 1;
-  padding: 12px;
+  padding: 14px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s;
+  letter-spacing: 0.5px;
 }
 
 .favorite-button {
-  background-color: #f1f1f1;
-  color: #333;
+  background: rgba(212, 175, 55, 0.2);
+  color: #d4af37;
+  border: 1px solid rgba(212, 175, 55, 0.4);
 }
 
 .favorite-button.favorited {
-  background-color: #ff4757;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
   color: white;
 }
 
 .contact-button {
-  background-color: #007bff;
-  color: white;
+  background: linear-gradient(135deg, #ffd700, #d4af37);
+  color: #0f1419;
 }
 
 .buy-button {
-  background-color: #2ed573;
+  background: linear-gradient(135deg, #51cf66, #2f9e44);
   color: white;
 }
 
 .action-button:hover {
-  opacity: 0.9;
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
 }
 .property-meta {
   display: flex;
-  gap: 12px;
-  margin: 4px 0;
-  color: #888;
+  gap: 14px;
+  margin: 6px 0;
+  color: rgba(212, 175, 55, 0.6);
   font-size: 12px;
 }
 

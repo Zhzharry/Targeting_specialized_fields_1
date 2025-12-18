@@ -3,7 +3,8 @@ import type {
   QueryParams,
   QueryResponse,
   PropertyCardList,
-  FavoriteResponse
+  FavoriteResponse,
+  PopularRecommendationResponse
 } from '../types/api.types'
 
 export const queryAPI = {
@@ -44,5 +45,10 @@ export const queryAPI = {
   // 2.4 查询页入口推荐
   getQueryRecommendations(): Promise<PropertyCardList> {
     return api.get('/home/go-query')
+  },
+
+  // 2.4 热门推荐
+  getPopularRecommendations(): Promise<PopularRecommendationResponse> {
+    return api.get('/home/popular')
   }
 }
