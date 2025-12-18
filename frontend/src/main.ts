@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import './assets/styles/global.css'
 
 // 1. 导入所有API服务
 import { authAPI } from './api/auth.api'
