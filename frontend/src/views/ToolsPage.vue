@@ -403,15 +403,13 @@
 <style scoped>
 .prediction-flex, .mortgage-flex {
   display: flex;
-  gap: 40px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 32px;
 }
 .prediction-form-col, .mortgage-form-col {
-  flex: 0 0 420px;
-  min-width: 360px;
-  max-width: 450px;
+  width: 100%;
   background: linear-gradient(135deg, rgba(26, 26, 46, 0.7), rgba(22, 33, 62, 0.8));
-  padding: 32px;
+  padding: 36px;
   border-radius: 20px;
   border: 2px solid rgba(212, 175, 55, 0.25);
   box-shadow:
@@ -438,26 +436,28 @@
   50% { left: 100%; }
 }
 .prediction-result-col, .mortgage-result-col {
-  flex: 1 1 0;
-  min-width: 0;
+  width: 100%;
+  min-height: 300px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   background: linear-gradient(135deg, rgba(22, 33, 62, 0.5), rgba(26, 26, 46, 0.6));
-  padding: 32px;
+  padding: 36px;
   border-radius: 20px;
   border: 2px solid rgba(212, 175, 55, 0.2);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(212, 175, 55, 0.08);
   backdrop-filter: blur(12px);
+  position: relative;
 }
 .empty-result-hint {
-  min-height: 100%;
+  min-height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
   color: rgba(212, 175, 55, 0.6);
   font-size: 18px;
   letter-spacing: 0.5px;
@@ -466,14 +466,16 @@
   margin-top: 0;
   box-shadow: none;
 }
-@media (max-width: 900px) {
-  .prediction-flex, .mortgage-flex {
-    flex-direction: column;
-    gap: 24px;
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
   }
-  .prediction-form-col, .mortgage-form-col, .prediction-result-col, .mortgage-result-col {
-    max-width: 100%;
-    min-width: 0;
+  .form-preview ul {
+    grid-template-columns: 1fr;
+  }
+  .predict-btn,
+  .calculate-btn {
+    min-width: 100%;
   }
 }
 </style>
@@ -1521,8 +1523,8 @@ watch(activeTool, (newValue) => {
 
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
   margin-bottom: 32px;
 }
 
@@ -1536,7 +1538,7 @@ watch(activeTool, (newValue) => {
   font-size: 13px;
   font-weight: 700;
   color: #ffd700;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   letter-spacing: 0.8px;
   text-transform: uppercase;
   display: flex;
@@ -1552,10 +1554,10 @@ watch(activeTool, (newValue) => {
 
 .form-group input,
 .form-group select {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 2px solid rgba(212, 175, 55, 0.3);
   border-radius: 10px;
-  font-size: 15px;
+  font-size: 14px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: linear-gradient(135deg, rgba(15, 20, 25, 0.9), rgba(20, 25, 30, 0.85));
   color: #ffd700;
@@ -1591,18 +1593,20 @@ watch(activeTool, (newValue) => {
 
 .form-actions {
   text-align: center;
+  margin-top: 12px;
 }
 
 .predict-btn,
 .calculate-btn {
-  width: 100%;
-  padding: 18px 32px;
+  min-width: 280px;
+  max-width: 400px;
+  padding: 18px 48px;
   background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffd700 100%);
   background-size: 200% 100%;
   color: #0f1419;
   border: none;
   border-radius: 12px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2299,5 +2303,80 @@ watch(activeTool, (newValue) => {
   color: rgba(212, 175, 55, 0.8);
   font-size: 14px;
   font-weight: 500;
+}
+
+.form-preview {
+  padding: 32px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.4), rgba(22, 33, 62, 0.5));
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(212, 175, 55, 0.1);
+  color: #d4af37;
+  font-size: 16px;
+  margin-bottom: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.form-preview::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+.form-preview h4 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  color: #ffd700;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-preview h4::before {
+  content: '📋';
+  font-size: 24px;
+}
+
+.form-preview ul {
+  margin: 0 0 24px 0;
+  padding: 0 0 0 24px;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.form-preview li {
+  margin-bottom: 10px;
+  color: rgba(212, 175, 55, 0.9);
+  font-size: 15px;
+  font-weight: 500;
+  position: relative;
+  padding-left: 8px;
+  transition: all 0.2s ease;
+}
+
+.form-preview li::before {
+  content: '▸';
+  position: absolute;
+  left: -16px;
+  color: #d4af37;
+  font-size: 12px;
+}
+
+.form-preview li:hover {
+  color: #ffd700;
+  transform: translateX(4px);
 }
 </style>
