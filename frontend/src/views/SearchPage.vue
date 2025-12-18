@@ -198,6 +198,36 @@
             </div>
           </div>
         </div>
+
+        <!-- 其他用户也在看 -->
+        <div v-if="othersAlsoViewed.length > 0" class="others-section">
+          <div class="section-header">
+            <h3>🔥 其他用户也在看</h3>
+            <span class="data-source-badge">{{ dataSourceText }}</span>
+          </div>
+          <div class="property-list">
+            <div
+              v-for="property in othersAlsoViewed"
+              :key="property.propertyId"
+              class="property-card recommendation-card"
+              @click="viewRecommendationProperty(property)"
+            >
+              <img :src="property.cover" :alt="property.title" class="property-image" />
+              <div class="property-info">
+                <h3 class="property-title">{{ property.title }}</h3>
+                <p class="property-location">{{ property.summary }}</p>
+                <div class="property-price" v-if="property.totalPrice">
+                  <span class="price">¥{{ property.totalPrice }}</span>
+                  <span class="unit">万</span>
+                </div>
+                <div class="property-tags">
+                  <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
+                  <span class="similarity-score">相似度 {{ property.score && !isNaN(property.score) ? Math.round(property.score * 100) : '计算中' }}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 热门推荐 -->
@@ -246,13 +276,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { queryAPI } from '@/api/query.api'
+import { recommendationAPI } from '@/api/recommendation.api'
 import PropertyDetailModal from '@/components/Common/PropertyDetailModal.vue'
-import type { PropertyDetail, PropertyCard } from '@/types/api.types'
+import type { PropertyDetail, PropertyCard, RecommendationItem } from '@/types/api.types'
+import { useAuthStore } from '@/stores/auth.store'
 
 const route = useRoute()
+const authStore = useAuthStore()
+
+// 获取当前用户ID
+const currentUserId = computed(() => {
+  if (authStore.userId) {
+    return authStore.userId
+  }
+  // 从 localStorage 获取
+  const userInfo = localStorage.getItem('userInfo')
+  if (userInfo) {
+    try {
+      return JSON.parse(userInfo).userId
+    } catch {
+      return null
+    }
+  }
+  return null
+})
 
 // 搜索状态
 const searchQuery = ref('')
@@ -288,6 +338,15 @@ const hotSearchWords = ref<string[]>([
 // 房源详情弹窗
 const showPropertyModal = ref(false)
 const selectedProperty = ref<PropertyDetail | null>(null)
+
+// 其他用户也在看
+const othersAlsoViewed = ref<RecommendationItem[]>([])
+const dataSource = ref<string>('database')
+
+// 数据源文本
+const dataSourceText = computed(() => {
+  return dataSource.value === 'hadoop_cache' ? '基于 Hadoop 智能推荐' : '基于数据库推荐'
+})
 
 // 快速筛选
 const quickFilters = ref([
@@ -359,6 +418,60 @@ const getMockDiscoverProperties = (): PropertyCard[] => {
       cover: 'https://picsum.photos/seed/2/300/200',
       detailUrl: 'https://example.com/property/2',
       tags: ['学区房', '电梯房']
+    },
+    {
+      propertyId: 3,
+      title: '复式四居室 带花园 拎包入住',
+      summary: '湖景花园 · 180㎡ · 4室2厅3卫',
+      totalPrice: 1200,
+      cover: 'https://picsum.photos/seed/3/300/200',
+      detailUrl: 'https://example.com/property/3',
+      tags: ['花园洋房', '拎包入住']
+    },
+    {
+      propertyId: 4,
+      title: '高档公寓 景观阳台 智能家居',
+      summary: 'CBD中心 · 95㎡ · 2室1厅2卫',
+      totalPrice: 580,
+      cover: 'https://picsum.photos/seed/4/300/200',
+      detailUrl: 'https://example.com/property/4',
+      tags: ['景观房', '智能家居']
+    },
+    {
+      propertyId: 5,
+      title: '温馨一居室 地铁口 投资首选',
+      summary: '地铁小区 · 55㎡ · 1室1厅1卫',
+      totalPrice: 280,
+      cover: 'https://picsum.photos/seed/5/300/200',
+      detailUrl: 'https://example.com/property/5',
+      tags: ['地铁房', '投资']
+    },
+    {
+      propertyId: 6,
+      title: '宽敞五居室 豪华装修 车位赠送',
+      summary: '豪宅区 · 220㎡ · 5室3厅4卫',
+      totalPrice: 2500,
+      cover: 'https://picsum.photos/seed/6/300/200',
+      detailUrl: 'https://example.com/property/6',
+      tags: ['豪华装修', '赠车位']
+    },
+    {
+      propertyId: 7,
+      title: '创意LOFT 工业风格 艺术氛围',
+      summary: '艺术区 · 110㎡ · 1室1厅2卫',
+      totalPrice: 420,
+      cover: 'https://picsum.photos/seed/7/300/200',
+      detailUrl: 'https://example.com/property/7',
+      tags: ['LOFT', '艺术设计']
+    },
+    {
+      propertyId: 8,
+      title: '联排别墅 私家花园 泳池',
+      summary: '别墅区 · 350㎡ · 6室4厅5卫',
+      totalPrice: 3800,
+      cover: 'https://picsum.photos/seed/8/300/200',
+      detailUrl: 'https://example.com/property/8',
+      tags: ['独栋别墅', '泳池']
     }
   ]
 }
@@ -505,12 +618,40 @@ const refreshDiscover = async () => {
   try {
     // 调用猜你喜欢API
     const response = await queryAPI.getGuessYouLike()
-    // 随机选择2个房源
-    discoverProperties.value = response.items.sort(() => Math.random() - 0.5).slice(0, 2)
+    // 随机选择8个房源（两排显示）
+    discoverProperties.value = response.items.sort(() => Math.random() - 0.5).slice(0, 8)
   } catch (error) {
     console.error('获取猜你喜欢失败:', error)
     // fallback到模拟数据
     discoverProperties.value = getMockDiscoverProperties()
+  }
+
+  // 同时加载"其他用户也在看"
+  loadOthersAlsoViewed()
+}
+
+// 加载"其他用户也在看"
+const loadOthersAlsoViewed = async () => {
+  if (!currentUserId.value) {
+    console.log('用户未登录，跳过加载"其他用户也在看"')
+    return
+  }
+
+  try {
+    const response = await recommendationAPI.getOthersAlsoViewed({
+      userId: currentUserId.value,
+      limit: 6,
+      excludeViewed: true,
+      useCache: true
+    })
+
+    othersAlsoViewed.value = response.items
+    dataSource.value = response.dataSource
+    console.log('其他用户也在看数据加载成功:', response)
+  } catch (error) {
+    console.error('加载"其他用户也在看"失败:', error)
+    // 失败时清空数据
+    othersAlsoViewed.value = []
   }
 }
 
@@ -520,7 +661,7 @@ const resetSearch = () => {
   fromHistory.value = false
 }
 
-const viewProperty = (propertyId: number) => {
+const viewProperty = async (propertyId: number) => {
   // 查找房源详情（从搜索结果或热门推荐中查找）
   const property = searchResults.value.find(p => p.propertyId === propertyId) ||
                    hotProperties.value.find(p => p.propertyId === propertyId)
@@ -528,13 +669,67 @@ const viewProperty = (propertyId: number) => {
   if (property) {
     selectedProperty.value = property
     showPropertyModal.value = true
+
+    // 记录浏览
+    try {
+      const userId = 1 // 暂时使用固定用户ID，后续从store获取
+      await queryAPI.recordBrowse(userId, propertyId)
+    } catch (error) {
+      console.error('记录浏览失败:', error)
+    }
   } else {
     alert('房源信息未找到')
   }
 }
 
+// 查看推荐的房源（其他用户也在看）
+const viewRecommendationProperty = async (item: RecommendationItem) => {
+  // 构建PropertyDetail对象
+  const property: PropertyDetail = {
+    propertyId: item.propertyId,
+    title: item.title,
+    status: 'for_sale',
+    communityName: '',
+    viewCount: 0,
+    favoriteCount: 0,
+    updatedAt: new Date().toISOString(),
+    priceInfo: {
+      total_price: item.totalPrice || 0,
+      unit_price: 0
+    },
+    layoutInfo: {
+      bedroom_count: 0,
+      living_room_count: 0,
+      bathroom_count: 0,
+      area: 0
+    },
+    basicInfo: {
+      property_type: 'apartment',
+      build_year: 0
+    },
+    locationInfo: {
+      province: '',
+      city: '',
+      district: ''
+    }
+  }
+
+  selectedProperty.value = property
+  showPropertyModal.value = true
+
+  // 记录浏览（来源：recommendation）
+  if (currentUserId.value) {
+    try {
+      await queryAPI.recordBrowse(currentUserId.value, item.propertyId, 'recommendation')
+      console.log('记录推荐房源浏览成功')
+    } catch (error) {
+      console.error('记录推荐房源浏览失败:', error)
+    }
+  }
+}
+
 // 处理猜你喜欢卡片点击（PropertyCard -> PropertyDetail）
-const viewDiscoverProperty = (card: PropertyCard) => {
+const viewDiscoverProperty = async (card: PropertyCard) => {
   if (!card) return
 
   // 从 summary 解析社区名、面积与卧室数量（容错处理）
@@ -578,17 +773,38 @@ const viewDiscoverProperty = (card: PropertyCard) => {
 
   selectedProperty.value = mapped
   showPropertyModal.value = true
+
+  // 记录浏览
+  if (currentUserId.value) {
+    try {
+      await queryAPI.recordBrowse(currentUserId.value, card.propertyId)
+    } catch (error) {
+      console.error('记录浏览失败:', error)
+    }
+  }
 }
 
 // 处理收藏
 const handleFavorite = async (propertyId: number) => {
   try {
-    const userId = 1 // 暂时使用固定用户ID，后续从store获取
-    await queryAPI.addFavorite(userId, propertyId)
+    if (!currentUserId.value) {
+      alert('请先登录')
+      return
+    }
+
+    console.log('收藏请求 - userId:', currentUserId.value, 'propertyId:', propertyId)
+    const response = await queryAPI.addFavorite(currentUserId.value, propertyId)
+    console.log('收藏成功响应:', response)
     alert('收藏成功！')
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('收藏失败:', error)
-    alert('收藏失败，请重试')
+    let errorMsg = '收藏失败，请重试'
+    if (error && typeof error === 'object') {
+      const err = error as { response?: { data?: { message?: string } }; message?: string }
+      console.error('错误详情:', err.response?.data)
+      errorMsg = err.response?.data?.message || err.message || errorMsg
+    }
+    alert(errorMsg)
   }
 }
 
@@ -1247,9 +1463,10 @@ onMounted(() => {
 }
 
 .property-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
+  justify-items: center;
 }
 
 .property-card {
@@ -1408,4 +1625,54 @@ onMounted(() => {
   font-weight: 500;
   font-size: 14px;
 }
+
+/* 其他用户也在看 */
+.others-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.others-section .section-header {
+  margin-bottom: 20px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-source-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.recommendation-card {
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.recommendation-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.25);
+  transform: translateY(-4px);
+}
+
+.similarity-score {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: auto;
+}
 </style>
+
+```

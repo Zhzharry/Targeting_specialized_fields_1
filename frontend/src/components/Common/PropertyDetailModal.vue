@@ -144,7 +144,12 @@ const closeModal = () => {
 }
 
 const toggleFavorite = () => {
-  if (!authStore.isLoggedIn) {
+  // 检查登录状态 - 支持多种方式
+  const userInfo = localStorage.getItem('userInfo')
+  const hasToken = localStorage.getItem('token')
+  const isUserLoggedIn = authStore.isLoggedIn || (hasToken && userInfo)
+
+  if (!isUserLoggedIn) {
     alert('请先登录')
     return
   }
@@ -156,7 +161,12 @@ const toggleFavorite = () => {
 }
 
 const handlePurchase = () => {
-  if (!authStore.isLoggedIn) {
+  // 检查登录状态 - 支持多种方式
+  const userInfo = localStorage.getItem('userInfo')
+  const hasToken = localStorage.getItem('token')
+  const isUserLoggedIn = authStore.isLoggedIn || (hasToken && userInfo)
+
+  if (!isUserLoggedIn) {
     alert('请先登录')
     return
   }

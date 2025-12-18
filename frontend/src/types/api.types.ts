@@ -289,3 +289,31 @@ export interface ErrorResponse {
   status?: number
   path?: string
 }
+
+// ==================== 推荐模块 ====================
+export interface RecommendationItem {
+  propertyId: number
+  title: string
+  summary: string
+  score: number
+  source: string
+  cover: string
+  totalPrice?: number
+  tags?: string[]
+}
+
+export interface OthersAlsoViewedParams {
+  userId: number
+  limit?: number
+  excludeViewed?: boolean
+  useCache?: boolean
+}
+
+export interface OthersAlsoViewedResponse {
+  items: RecommendationItem[]
+  count: number
+  userId: number
+  dataSource: string
+  lastHadoopUpdate?: string
+  message: string
+}

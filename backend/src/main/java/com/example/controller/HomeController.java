@@ -105,11 +105,109 @@ public class HomeController {
     }
 
     /**
-     * 猜你喜欢接口：返回前端展示的房源推荐（当前使用静态示例数据）。
+     * 猜你喜欢接口：返回前端展示的房源推荐（从数据库获取真实房源）。
      */
     @GetMapping("/guess-you-like")
-    public ResponseEntity<Map<String, Object>> guessYouLike() {
-        return ResponseEntity.ok(buildRecommendationResponse("猜你喜欢数据（示例）"));
+    public ResponseEntity<Map<String, Object>> guessYouLike(
+            @RequestParam(value = "userId", required = false) Long userId) {
+        try {
+            // 从数据库获取热门房源（浏览次数最多）
+            List<Map<String, Object>> properties = getPopularProperties(10);
+
+            Map<String, Object> body = new HashMap<String, Object>();
+            body.put("items", properties);
+            body.put("message", "猜你喜欢数据获取成功");
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            // 失败时返回示例数据
+            return ResponseEntity.ok(buildRecommendationResponse("猜你喜欢数据（示例）"));
+        }
+    }
+
+    /**
+     * 获取热门房源（浏览次数最多）
+     */
+    private List<Map<String, Object>> getPopularProperties(int limit) throws SQLException {
+        List<Map<String, Object>> properties = new ArrayList<>();
+
+        String sql = "SELECT p.property_id, p.title, p.price_info, p.layout_info, " +
+                "c.name as community_name, c.location_info, p.view_count " +
+                "FROM properties p " +
+                "LEFT JOIN communities c ON p.community_id = c.community_id " +
+                "WHERE p.status = 'for_sale' " +
+                "ORDER BY p.view_count DESC " +
+                "LIMIT ?";
+
+        try (Connection connection = getConnection();
+                PreparedStatement ps = connection.prepareStatement(sql)) {
+
+            ps.setInt(1, limit);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> property = new HashMap<>();
+                    property.put("propertyId", rs.getLong("property_id"));
+                    property.put("title", rs.getString("title"));
+
+                    // 解析价格信息
+                    String priceInfoJson = rs.getString("price_info");
+                    Map<String, Object> priceInfo = parseJsonToMap(priceInfoJson);
+                    Double totalPrice = priceInfo != null
+                            ? ((Number) priceInfo.getOrDefault("total_price", 0)).doubleValue()
+                            : 0.0;
+
+                    // 解析户型信息
+                    String layoutInfoJson = rs.getString("layout_info");
+                    Map<String, Object> layoutInfo = parseJsonToMap(layoutInfoJson);
+
+                    // 解析位置信息
+                    String locationInfoJson = rs.getString("location_info");
+                    Map<String, Object> locationInfo = parseJsonToMap(locationInfoJson);
+                    String district = locationInfo != null ? (String) locationInfo.getOrDefault("district", "") : "";
+
+                    // 构建 summary
+                    String communityName = rs.getString("community_name");
+                    Integer area = layoutInfo != null ? ((Number) layoutInfo.getOrDefault("area", 0)).intValue() : 0;
+                    Integer bedrooms = layoutInfo != null
+                            ? ((Number) layoutInfo.getOrDefault("bedroom_count", 0)).intValue()
+                            : 0;
+                    Integer livingRooms = layoutInfo != null
+                            ? ((Number) layoutInfo.getOrDefault("living_room_count", 0)).intValue()
+                            : 0;
+                    Integer bathrooms = layoutInfo != null
+                            ? ((Number) layoutInfo.getOrDefault("bathroom_count", 0)).intValue()
+                            : 0;
+
+                    String summary = String.format("%s · %d㎡ · %d室%d厅%d卫",
+                            district, area, bedrooms, livingRooms, bathrooms);
+
+                    property.put("summary", summary);
+                    property.put("totalPrice", totalPrice);
+                    property.put("cover", "https://picsum.photos/seed/" + rs.getLong("property_id") + "/300/200");
+                    property.put("detailUrl", "https://example.com/property/" + rs.getLong("property_id"));
+                    property.put("tags", Arrays.asList("热门房源", "高浏览量"));
+
+                    properties.add(property);
+                }
+            }
+        }
+
+        return properties;
+    }
+
+    /**
+     * 解析JSON字符串为Map
+     */
+    private Map<String, Object> parseJsonToMap(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

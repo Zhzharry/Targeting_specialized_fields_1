@@ -256,7 +256,7 @@
           </div>
 <div v-else class="favorites-list">
   <!-- 收藏弹窗中的显示 -->
-  <div v-for="item in favorites" :key="item.id" class="favorite-item" @click="showPropertyDetailModal(item)">
+  <div v-for="item in favorites" :key="item.id" class="favorite-item" @click="showPropertyDetailFromFavorite(item)">
     <img :src="item.image" alt="房源" class="favorite-img" />
     <div class="favorite-info">
       <h4 class="favorite-title">{{ item.title }}</h4>
@@ -350,7 +350,7 @@
        <div v-for="item in history"
      :key="item.id"
      class="history-item"
-     @click="showPropertyDetailModal(item)"
+     @click="showPropertyDetailFromHistory(item)"
 >
   <img :src="item.image" alt="房源" class="history-img" />
   <div class="history-info">
@@ -439,6 +439,7 @@ interface HistoryItem {
 // 添加房源详情接口定义
 interface PropertyDetail {
   id: number
+  propertyId?: number  // 房源ID（用于浏览记录）
   title: string
   community: string
   price: number
@@ -1116,14 +1117,42 @@ const handleLogout = () => {
 const showPropertyDetail = ref(false)
 const selectedProperty = ref<PropertyDetail | null>(null)
 
-// 显示房源详情模态框
-const showPropertyDetailModal = (property: PropertyDetail) => {
+// 显示房源详情模态框（从收藏）
+const showPropertyDetailFromFavorite = async (property: PropertyDetail & { propertyId?: number }) => {
   selectedProperty.value = property
   // 关闭当前打开的弹窗
   showFavorites.value = false
   showHistory.value = false
   // 显示详情弹窗
   showPropertyDetail.value = true
+
+  // 记录浏览（从收藏进入）
+  if (currentUserId.value && property.propertyId) {
+    try {
+      await queryAPI.recordBrowse(currentUserId.value, property.propertyId, 'favorite')
+    } catch (error) {
+      console.error('记录浏览失败:', error)
+    }
+  }
+}
+
+// 显示房源详情模态框（从历史记录）
+const showPropertyDetailFromHistory = async (property: PropertyDetail & { propertyId?: number }) => {
+  selectedProperty.value = property
+  // 关闭当前打开的弹窗
+  showFavorites.value = false
+  showHistory.value = false
+  // 显示详情弹窗
+  showPropertyDetail.value = true
+
+  // 记录浏览（从历史记录进入）
+  if (currentUserId.value && property.propertyId) {
+    try {
+      await queryAPI.recordBrowse(currentUserId.value, property.propertyId, 'history')
+    } catch (error) {
+      console.error('记录浏览失败:', error)
+    }
+  }
 }
 
 // 检查房源是否已收藏
