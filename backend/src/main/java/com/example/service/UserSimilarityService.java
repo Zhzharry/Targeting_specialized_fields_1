@@ -607,25 +607,47 @@ public class UserSimilarityService {
     }
     
     /**
-     * 保存聚类结果
+     * 保存聚类结果到数据库
+     * 将聚类信息保存到user_profile的JSON字段中
      */
     private void saveClusterResults(Dataset<Row> clusteredDF) {
         if (clusteredDF.isEmpty()) {
+            System.out.println("聚类结果为空，跳过保存");
             return;
         }
         
         List<Row> rows = clusteredDF.select("user_id", "cluster").collectAsList();
         
-        // 可以保存到user_preferences表或单独的聚类表
+        String updateSql = "UPDATE users SET user_profile = JSON_SET(COALESCE(user_profile, '{}'), '$.cluster_id', ?, '$.cluster_algorithm', 'kmeans', '$.cluster_calculated_at', ?) WHERE user_id = ?";
+        
+        List<Object[]> batchArgs = new ArrayList<>();
+        String calculatedAt = new Timestamp(System.currentTimeMillis()).toString();
+        
+        int savedCount = 0;
         for (Row row : rows) {
-            int userId = (int) row.getDouble(0);
-            int cluster = row.getInt(1);
-            
-            // 这里可以更新用户的聚类标签
-            // jdbcTemplate.update("UPDATE users SET cluster_id = ? WHERE user_id = ?", cluster, userId);
+            try {
+                int userId = (int) row.getDouble(0);
+                int cluster = row.getInt(1);
+                
+                batchArgs.add(new Object[]{cluster, calculatedAt, userId});
+                savedCount++;
+                
+                // 批量提交，每500条提交一次
+                if (batchArgs.size() >= BATCH_SIZE) {
+                    jdbcTemplate.batchUpdate(updateSql, batchArgs);
+                    batchArgs.clear();
+                }
+            } catch (Exception e) {
+                System.err.println("处理聚类结果时出错: " + e.getMessage());
+            }
         }
         
-        System.out.println("聚类结果已处理");
+        // 提交剩余数据
+        if (!batchArgs.isEmpty()) {
+            jdbcTemplate.batchUpdate(updateSql, batchArgs);
+        }
+        
+        System.out.println("用户聚类结果已保存到数据库，共 " + savedCount + " 个用户");
     }
     
     // ==================== 相似度计算方法 ====================
