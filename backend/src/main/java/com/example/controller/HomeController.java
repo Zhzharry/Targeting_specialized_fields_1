@@ -112,6 +112,144 @@ public class HomeController {
         return ResponseEntity.ok(buildRecommendationResponse("猜你喜欢数据（示例）"));
     }
 
+    /**
+     * 热门推荐接口：返回前100个浏览量最高的房源中随机10个
+     */
+    @GetMapping("/popular")
+    public ResponseEntity<Map<String, Object>> getPopularRecommendations() {
+        try (Connection connection = getConnection()) {
+            // 1. 先获取前100个浏览量最高的房源
+            String top100Sql = "SELECT " +
+                    "p.property_id, " +
+                    "p.title, " +
+                    "p.price_info, " +
+                    "p.layout_info, " +
+                    "p.basic_info, " +
+                    "p.view_count, " +
+                    "p.favorite_count, " +
+                    "c.name as community_name, " +
+                    "c.location_info " +
+                    "FROM properties p " +
+                    "LEFT JOIN communities c ON p.community_id = c.community_id " +
+                    "WHERE p.status = 'for_sale' " +
+                    "ORDER BY p.view_count DESC, p.favorite_count DESC " +
+                    "LIMIT 100";
+            
+            List<Map<String, Object>> top100Properties = new ArrayList<>();
+            
+            try (PreparedStatement ps = connection.prepareStatement(top100Sql);
+                 ResultSet rs = ps.executeQuery()) {
+                
+                while (rs.next()) {
+                    Map<String, Object> property = new HashMap<>();
+                    Long propertyId = rs.getLong("property_id");
+                    
+                    property.put("propertyId", propertyId);
+                    property.put("title", rs.getString("title"));
+                    property.put("viewCount", rs.getInt("view_count"));
+                    property.put("favoriteCount", rs.getInt("favorite_count"));
+                    
+                    // 解析JSON字段
+                    String priceInfoJson = rs.getString("price_info");
+                    String layoutInfoJson = rs.getString("layout_info");
+                    String basicInfoJson = rs.getString("basic_info");
+                    String locationInfoJson = rs.getString("location_info");
+                    
+                    // 价格信息
+                    Map<String, Object> priceInfo = parseJson(priceInfoJson);
+                    property.put("priceInfo", priceInfo);
+                    Double totalPrice = extractDouble(priceInfo, "total_price");
+                    property.put("totalPrice", totalPrice != null ? totalPrice : 0);
+                    
+                    // 户型信息
+                    Map<String, Object> layoutInfo = parseJson(layoutInfoJson);
+                    property.put("layoutInfo", layoutInfo);
+                    Double area = extractDouble(layoutInfo, "area");
+                    Integer bedroomCount = extractInt(layoutInfo, "bedroom_count");
+                    Integer livingRoomCount = extractInt(layoutInfo, "living_room_count");
+                    
+                    // 构建summary
+                    String communityName = rs.getString("community_name");
+                    String summary = String.format("%s · %.0f㎡ · %d室%d厅",
+                            communityName != null ? communityName : "未知小区",
+                            area != null ? area : 0,
+                            bedroomCount != null ? bedroomCount : 0,
+                            livingRoomCount != null ? livingRoomCount : 0);
+                    property.put("summary", summary);
+                    
+                    // 基本信息
+                    Map<String, Object> basicInfo = parseJson(basicInfoJson);
+                    property.put("basicInfo", basicInfo);
+                    
+                    // 位置信息
+                    Map<String, Object> locationInfo = parseJson(locationInfoJson);
+                    property.put("locationInfo", locationInfo);
+                    
+                    // 图片和链接
+                    property.put("cover", "https://picsum.photos/seed/" + propertyId + "/300/200");
+                    property.put("detailUrl", "/property/" + propertyId);
+                    
+                    // 标签
+                    List<String> tags = new ArrayList<>();
+                    int viewCount = rs.getInt("view_count");
+                    int favoriteCount = rs.getInt("favorite_count");
+                    tags.add("热门房源");
+                    if (viewCount > 50) tags.add("超热门");
+                    if (favoriteCount > 10) tags.add("多人收藏");
+                    property.put("tags", tags);
+                    
+                    top100Properties.add(property);
+                }
+            }
+            
+            // 2. 从100个中随机选择10个
+            Collections.shuffle(top100Properties);
+            List<Map<String, Object>> random10 = top100Properties.stream()
+                    .limit(10)
+                    .collect(Collectors.toList());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("items", random10);
+            response.put("count", random10.size());
+            response.put("totalCandidates", top100Properties.size());
+            response.put("message", "热门推荐获取成功");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (SQLException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("message", "获取热门推荐失败");
+            error.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
+        }
+    }
+    
+    /**
+     * 从Map中提取Double值
+     */
+    private Double extractDouble(Map<String, Object> map, String key) {
+        if (map == null) return null;
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        return null;
+    }
+    
+    /**
+     * 从Map中提取Integer值
+     */
+    private Integer extractInt(Map<String, Object> map, String key) {
+        if (map == null) return null;
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        return null;
+    }
+
 
 
 
