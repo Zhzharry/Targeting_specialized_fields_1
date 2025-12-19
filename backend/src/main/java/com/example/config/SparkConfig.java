@@ -40,17 +40,40 @@ public class SparkConfig {
     @Value("${spark.sql.shuffle.partitions:10}")
     private String shufflePartitions;
     
+    @Value("${spark.submit.deployMode:client}")
+    private String deployMode;
+    
+    @Value("${spark.yarn.queue:}")
+    private String yarnQueue;
+    
+    @Value("${spark.hadoop.fs.defaultFS:}")
+    private String sparkDefaultFS;
+    
+    @Value("${spark.hadoop.resource.manager.address:}")
+    private String yarnRMAddress;
+    
+    @Value("${spark.hadoop.resource.manager.scheduler.address:}")
+    private String yarnSchedulerAddress;
+    
+    @Value("${spark.hadoop.history.server.address:}")
+    private String historyServerAddress;
+    
+    @Value("${spark.ui.enabled:false}")
+    private String sparkUiEnabled;
+    
     private SparkSession sparkSession;
     
     @Bean
     public SparkSession sparkSession() {
-        // ========== Windows环境兼容性设置 ==========
+        boolean isLocal = master != null && master.startsWith("local");
         String tempDir = System.getProperty("java.io.tmpdir");
-        System.setProperty("hadoop.home.dir", tempDir);
-        System.setProperty("HADOOP_HOME", tempDir);
         
-        // 禁用Hadoop安全检查
-        System.setProperty("hadoop.security.authentication", "simple");
+        if (isLocal) {
+            // ========== Windows环境兼容性设置（仅本地模式需要） ==========
+            System.setProperty("hadoop.home.dir", tempDir);
+            System.setProperty("HADOOP_HOME", tempDir);
+            System.setProperty("hadoop.security.authentication", "simple");
+        }
         
         // ========== Spark配置 ==========
         SparkConf conf = new SparkConf()
@@ -72,18 +95,35 @@ public class SparkConfig {
             // ---------- 时间解析兼容性 ----------
             .set("spark.sql.legacy.timeParserPolicy", "LEGACY")
             
-            // ---------- 网络配置（本地模式）----------
-            .set("spark.driver.bindAddress", "127.0.0.1")
-            .set("spark.ui.enabled", "false")
-            
-            // ---------- 文件系统配置（本地模式）----------
-            .set("spark.hadoop.fs.defaultFS", "file:///")
-            .set("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem")
-            .set("spark.sql.warehouse.dir", tempDir + "/spark-warehouse")
-            
             // ---------- 其他优化 ----------
             .set("spark.hadoop.validateOutputSpecs", "false")
             .set("spark.sql.adaptive.enabled", "true");
+        
+        if (isLocal) {
+            conf.set("spark.driver.bindAddress", "127.0.0.1")
+                .set("spark.ui.enabled", sparkUiEnabled)
+                .set("spark.hadoop.fs.defaultFS", "file:///")
+                .set("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem")
+                .set("spark.sql.warehouse.dir", tempDir + "/spark-warehouse");
+        } else {
+            conf.set("spark.submit.deployMode", deployMode);
+            if (sparkDefaultFS != null && !sparkDefaultFS.isEmpty()) {
+                conf.set("spark.hadoop.fs.defaultFS", sparkDefaultFS);
+            }
+            if (yarnQueue != null && !yarnQueue.isEmpty()) {
+                conf.set("spark.yarn.queue", yarnQueue);
+            }
+            if (yarnRMAddress != null && !yarnRMAddress.isEmpty()) {
+                conf.set("spark.hadoop.yarn.resourcemanager.address", yarnRMAddress);
+            }
+            if (yarnSchedulerAddress != null && !yarnSchedulerAddress.isEmpty()) {
+                conf.set("spark.hadoop.yarn.resourcemanager.scheduler.address", yarnSchedulerAddress);
+            }
+            if (historyServerAddress != null && !historyServerAddress.isEmpty()) {
+                conf.set("spark.history.fs.logDirectory", historyServerAddress);
+            }
+            conf.set("spark.ui.enabled", sparkUiEnabled);
+        }
         
         sparkSession = SparkSession.builder()
             .config(conf)
