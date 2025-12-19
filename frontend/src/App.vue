@@ -1,5 +1,14 @@
 <script setup lang="ts">
-// 可以在这里添加全局逻辑
+import { onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth.store'
+
+// 初始化 auth store（从 localStorage 恢复登录状态）
+const authStore = useAuthStore()
+
+onMounted(() => {
+  authStore.initialize()
+  console.log('✅ Auth Store 已初始化，登录状态:', authStore.isLoggedIn)
+})
 </script>
 
 <template>

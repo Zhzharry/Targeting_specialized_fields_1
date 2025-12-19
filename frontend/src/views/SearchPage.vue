@@ -1,11 +1,35 @@
 <template>
   <div class="search-page">
+    <!-- 豪华背景装饰 -->
+    <div class="luxury-background">
+      <div class="floating-orb orb-1"></div>
+      <div class="floating-orb orb-2"></div>
+      <div class="floating-orb orb-3"></div>
+    </div>
+
     <!-- 顶部导航 -->
     <header class="header">
-      <div class="logo" @click="$router.push('/')">房产平台</div>
+      <div class="logo" @click="$router.push('/')">
+        <span class="logo-icon">🏛️</span>
+        <span class="logo-text">尊贵房产</span>
+      </div>
+      <nav class="top-nav">
+        <button class="nav-link active" @click="$router.push('/search')">
+          <span class="nav-icon">🔍</span>
+          <span>搜索</span>
+        </button>
+        <button class="nav-link" @click="$router.push('/tools')">
+          <span class="nav-icon">📊</span>
+          <span>工具</span>
+        </button>
+        <button class="nav-link" @click="$router.push('/profile')">
+          <span class="nav-icon">👤</span>
+          <span>我的</span>
+        </button>
+      </nav>
       <div class="header-actions">
         <button class="icon-btn" @click="$router.push('/login')">
-          <span>👤</span>
+          <span>🔑</span>
         </button>
       </div>
     </header>
@@ -184,6 +208,36 @@
             </div>
           </div>
         </div>
+
+        <!-- 其他用户也在看 -->
+        <div v-if="othersAlsoViewed.length > 0" class="others-section">
+          <div class="section-header">
+            <h3>🔥 其他用户也在看</h3>
+            <span class="data-source-badge">{{ dataSourceText }}</span>
+          </div>
+          <div class="property-list">
+            <div
+              v-for="property in othersAlsoViewed"
+              :key="property.propertyId"
+              class="property-card recommendation-card"
+              @click="viewRecommendationProperty(property)"
+            >
+              <img :src="property.cover" :alt="property.title" class="property-image" />
+              <div class="property-info">
+                <h3 class="property-title">{{ property.title }}</h3>
+                <p class="property-location">{{ property.summary }}</p>
+                <div class="property-price" v-if="property.totalPrice">
+                  <span class="price">¥{{ property.totalPrice }}</span>
+                  <span class="unit">万</span>
+                </div>
+                <div class="property-tags">
+                  <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
+                  <span class="similarity-score">相似度 {{ property.score && !isNaN(property.score) ? Math.round(property.score * 100) : '计算中' }}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 热门推荐 -->
@@ -200,41 +254,23 @@
               <img :src="getPropertyImage(property)" :alt="property.title" class="property-image" />
               <div class="property-info">
                 <h3 class="property-title">{{ property.title }}</h3>
-                <p class="property-location">{{ property.communityName }}</p>
+                <p class="property-location">{{ property.community_name }}</p>
                 <div class="property-meta">
                   <span>{{ property.layoutInfo.bedroom_count }}室{{ property.layoutInfo.living_room_count }}厅</span>
                   <span>{{ property.layoutInfo.area }}㎡</span>
                 </div>
                 <div class="property-price">
-                  <span class="price">¥{{ property.priceInfo.total_price }}</span>
+                  <span class="price">¥{{ property.totalPrice }}</span>
                   <span class="unit">万</span>
                 </div>
                 <div class="property-tags">
-                  <span class="tag">{{ property.basicInfo.property_type === 'apartment' ? '公寓' : '住宅' }}</span>
-                  <span class="tag">热门</span>
-                  <span class="tag">浏览{{ property.viewCount }}次</span>
+                  <span v-for="tag in property.tags" :key="tag" class="tag">{{ tag }}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 底部导航 -->
-    <div class="bottom-nav">
-      <button class="nav-btn" @click="$router.push('/profile')">
-        <span>👤</span>
-        <span>我的</span>
-      </button>
-      <button class="nav-btn active">
-        <span>🔍</span>
-        <span>搜索</span>
-      </button>
-      <button class="nav-btn" @click="$router.push('/tools')">
-        <span>📊</span>
-        <span>工具</span>
-      </button>
     </div>
   </div>
 
@@ -248,13 +284,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { queryAPI } from '@/api/query.api'
+import { recommendationAPI } from '@/api/recommendation.api'
 import PropertyDetailModal from '@/components/Common/PropertyDetailModal.vue'
-import type { PropertyDetail, PropertyCard } from '@/types/api.types'
+import type { PropertyDetail, PropertyCard, RecommendationItem, PopularProperty } from '@/types/api.types'
+import { useAuthStore } from '@/stores/auth.store'
 
 const route = useRoute()
+const authStore = useAuthStore()
+
+// 获取当前用户ID
+const currentUserId = computed(() => {
+  if (authStore.userId) {
+    return authStore.userId
+  }
+  // 从 localStorage 获取
+  const userInfo = localStorage.getItem('userInfo')
+  if (userInfo) {
+    try {
+      return JSON.parse(userInfo).userId
+    } catch {
+      return null
+    }
+  }
+  return null
+})
 
 // 搜索状态
 const searchQuery = ref('')
@@ -289,21 +345,28 @@ const hotSearchWords = ref<string[]>([
 
 // 房源详情弹窗
 const showPropertyModal = ref(false)
-const selectedProperty = ref<PropertyDetail | null>(null)
+const selectedProperty = ref<PropertyDetail | PopularProperty | null>(null)
+
+// 其他用户也在看
+const othersAlsoViewed = ref<RecommendationItem[]>([])
+const dataSource = ref<string>('database')
+
+// 数据源文本
+const dataSourceText = computed(() => {
+  return dataSource.value === 'hadoop_cache' ? '基于 Hadoop 智能推荐' : '基于数据库推荐'
+})
 
 // 快速筛选
 const quickFilters = ref([
   { value: 'all', label: '全部' },
-  { value: 'nearby', label: '附近' },
   { value: 'cheap', label: '低价' },
   { value: 'new', label: '最新' },
-  { value: 'hot', label: '热门' },
 ])
 
 // 搜索结果 - 使用真实的API数据结构
 const searchResults = ref<PropertyDetail[]>([])
 const discoverProperties = ref<PropertyCard[]>([])
-const hotProperties = ref<PropertyDetail[]>([])
+const hotProperties = ref<PopularProperty[]>([])
 
 // 辅助函数：根据筛选条件生成API参数
 const getFilterParams = (filter: string): Partial<{
@@ -311,30 +374,27 @@ const getFilterParams = (filter: string): Partial<{
   maxArea: number
   maxPrice: number
   minViewCount: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
 }> => {
   const params: Partial<{
     minArea: number
     maxArea: number
     maxPrice: number
     minViewCount: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
   }> = {}
 
   switch (filter) {
-    case 'nearby':
-      // 附近房源 - 可以根据用户位置设置距离参数
-      params.minArea = 50
-      params.maxArea = 150
-      break
     case 'cheap':
       // 低价房源
       params.maxPrice = 500
       break
     case 'new':
-      // 最新房源 - 按更新时间排序（后端需要支持）
-      break
-    case 'hot':
-      // 热门房源 - 按浏览次数排序（后端需要支持）
-      params.minViewCount = 10
+      // 最新房源 - 后端默认就是按更新时间倒序，这里可以明确指定
+      params.sortBy = 'updated_at'
+      params.sortOrder = 'desc'
       break
   }
 
@@ -361,6 +421,60 @@ const getMockDiscoverProperties = (): PropertyCard[] => {
       cover: 'https://picsum.photos/seed/2/300/200',
       detailUrl: 'https://example.com/property/2',
       tags: ['学区房', '电梯房']
+    },
+    {
+      propertyId: 3,
+      title: '复式四居室 带花园 拎包入住',
+      summary: '湖景花园 · 180㎡ · 4室2厅3卫',
+      totalPrice: 1200,
+      cover: 'https://picsum.photos/seed/3/300/200',
+      detailUrl: 'https://example.com/property/3',
+      tags: ['花园洋房', '拎包入住']
+    },
+    {
+      propertyId: 4,
+      title: '高档公寓 景观阳台 智能家居',
+      summary: 'CBD中心 · 95㎡ · 2室1厅2卫',
+      totalPrice: 580,
+      cover: 'https://picsum.photos/seed/4/300/200',
+      detailUrl: 'https://example.com/property/4',
+      tags: ['景观房', '智能家居']
+    },
+    {
+      propertyId: 5,
+      title: '温馨一居室 地铁口 投资首选',
+      summary: '地铁小区 · 55㎡ · 1室1厅1卫',
+      totalPrice: 280,
+      cover: 'https://picsum.photos/seed/5/300/200',
+      detailUrl: 'https://example.com/property/5',
+      tags: ['地铁房', '投资']
+    },
+    {
+      propertyId: 6,
+      title: '宽敞五居室 豪华装修 车位赠送',
+      summary: '豪宅区 · 220㎡ · 5室3厅4卫',
+      totalPrice: 2500,
+      cover: 'https://picsum.photos/seed/6/300/200',
+      detailUrl: 'https://example.com/property/6',
+      tags: ['豪华装修', '赠车位']
+    },
+    {
+      propertyId: 7,
+      title: '创意LOFT 工业风格 艺术氛围',
+      summary: '艺术区 · 110㎡ · 1室1厅2卫',
+      totalPrice: 420,
+      cover: 'https://picsum.photos/seed/7/300/200',
+      detailUrl: 'https://example.com/property/7',
+      tags: ['LOFT', '艺术设计']
+    },
+    {
+      propertyId: 8,
+      title: '联排别墅 私家花园 泳池',
+      summary: '别墅区 · 350㎡ · 6室4厅5卫',
+      totalPrice: 3800,
+      cover: 'https://picsum.photos/seed/8/300/200',
+      detailUrl: 'https://example.com/property/8',
+      tags: ['独栋别墅', '泳池']
     }
   ]
 }
@@ -423,6 +537,160 @@ const getMockSearchResults = (): PropertyDetail[] => {
         city: '深圳市',
         district: '福田区'
       }
+    }
+  ]
+}
+
+// 模拟热门推荐数据（PopularProperty格式）
+const getMockPopularProperties = (): PopularProperty[] => {
+  return [
+    {
+      propertyId: 1,
+      title: "万科城市花园 精装三房 南向采光好",
+      summary: "万科城市花园 · 89㎡ · 3室2厅",
+      totalPrice: 650.5,
+      viewCount: 156,
+      favoriteCount: 23,
+      priceInfo: {
+        unit_price: 85000,
+        total_price: 650.5,
+        price_history: []
+      },
+      layoutInfo: {
+        area: 89.5,
+        floor: 15,
+        orientation: "south",
+        total_floors: 28,
+        bedroom_count: 3,
+        bathroom_count: 2,
+        living_room_count: 2
+      },
+      basicInfo: {
+        build_year: 2018,
+        decoration: "hard",
+        property_type: "apartment"
+      },
+      locationInfo: {
+        city: "深圳市",
+        district: "南山区",
+        address: "科技园路123号",
+        province: "广东省"
+      },
+      community_name: "万科城市花园",
+      cover: "https://picsum.photos/seed/1/300/200",
+      detailUrl: "/property/1",
+      tags: ["热门房源", "超热门", "多人收藏"]
+    },
+    {
+      propertyId: 2,
+      title: "深业上城 复式公寓",
+      summary: "深业上城 · 120㎡ · 4室2厅",
+      totalPrice: 880.0,
+      viewCount: 89,
+      favoriteCount: 15,
+      priceInfo: {
+        unit_price: 95000,
+        total_price: 880.0,
+        price_history: []
+      },
+      layoutInfo: {
+        area: 120.0,
+        floor: 8,
+        orientation: "north",
+        total_floors: 32,
+        bedroom_count: 4,
+        bathroom_count: 2,
+        living_room_count: 2
+      },
+      basicInfo: {
+        build_year: 2020,
+        decoration: "fine",
+        property_type: "apartment"
+      },
+      locationInfo: {
+        city: "深圳市",
+        district: "南山区",
+        address: "高新南四道18号",
+        province: "广东省"
+      },
+      community_name: "深业上城",
+      cover: "https://picsum.photos/seed/2/300/200",
+      detailUrl: "/property/2",
+      tags: ["热门房源", "多人收藏"]
+    },
+    {
+      propertyId: 3,
+      title: "华润城润府 精装四房",
+      summary: "华润城润府 · 140㎡ · 4室2厅",
+      totalPrice: 1200.0,
+      viewCount: 67,
+      favoriteCount: 8,
+      priceInfo: {
+        unit_price: 110000,
+        total_price: 1200.0,
+        price_history: []
+      },
+      layoutInfo: {
+        area: 140.0,
+        floor: 12,
+        orientation: "east",
+        total_floors: 45,
+        bedroom_count: 4,
+        bathroom_count: 2,
+        living_room_count: 2
+      },
+      basicInfo: {
+        build_year: 2019,
+        decoration: "hard",
+        property_type: "apartment"
+      },
+      locationInfo: {
+        city: "深圳市",
+        district: "南山区",
+        address: "润府路1号",
+        province: "广东省"
+      },
+      community_name: "华润城润府",
+      cover: "https://picsum.photos/seed/3/300/200",
+      detailUrl: "/property/3",
+      tags: ["热门房源"]
+    },
+    {
+      propertyId: 4,
+      title: "招商雍景湾 景观大宅",
+      summary: "招商雍景湾 · 180㎡ · 5室3厅",
+      totalPrice: 2200.0,
+      viewCount: 45,
+      favoriteCount: 12,
+      priceInfo: {
+        unit_price: 130000,
+        total_price: 2200.0,
+        price_history: []
+      },
+      layoutInfo: {
+        area: 180.0,
+        floor: 25,
+        orientation: "south",
+        total_floors: 38,
+        bedroom_count: 5,
+        bathroom_count: 3,
+        living_room_count: 2
+      },
+      basicInfo: {
+        build_year: 2021,
+        decoration: "fine",
+        property_type: "villa"
+      },
+      locationInfo: {
+        city: "深圳市",
+        district: "南山区",
+        address: "雍景湾路88号",
+        province: "广东省"
+      },
+      community_name: "招商雍景湾",
+      cover: "https://picsum.photos/seed/4/300/200",
+      detailUrl: "/property/4",
+      tags: ["热门房源", "多人收藏"]
     }
   ]
 }
@@ -507,12 +775,44 @@ const refreshDiscover = async () => {
   try {
     // 调用猜你喜欢API
     const response = await queryAPI.getGuessYouLike()
-    // 随机选择2个房源
-    discoverProperties.value = response.items.sort(() => Math.random() - 0.5).slice(0, 2)
+    // 随机选择8个房源（两排显示）
+    discoverProperties.value = response.items.sort(() => Math.random() - 0.5).slice(0, 8)
   } catch (error) {
     console.error('获取猜你喜欢失败:', error)
     // fallback到模拟数据
     discoverProperties.value = getMockDiscoverProperties()
+  }
+
+  // 同时加载"其他用户也在看"
+  loadOthersAlsoViewed()
+}
+
+// 加载"其他用户也在看"
+const loadOthersAlsoViewed = async () => {
+  if (!currentUserId.value) {
+    console.log('用户未登录，跳过加载"其他用户也在看"')
+    return
+  }
+
+  try {
+    const response = await recommendationAPI.getOthersAlsoViewed({
+      userId: currentUserId.value,
+      limit: 6,
+      excludeViewed: true,
+      useCache: true
+    })
+
+    // 字段映射：将recommendationScore映射为score，以便前端显示
+    othersAlsoViewed.value = response.items.map(item => ({
+      ...item,
+      score: item.recommendationScore || item.score || 0
+    }))
+    dataSource.value = response.dataSource
+    console.log('其他用户也在看数据加载成功:', response)
+  } catch (error) {
+    console.error('加载"其他用户也在看"失败:', error)
+    // 失败时清空数据
+    othersAlsoViewed.value = []
   }
 }
 
@@ -522,7 +822,7 @@ const resetSearch = () => {
   fromHistory.value = false
 }
 
-const viewProperty = (propertyId: number) => {
+const viewProperty = async (propertyId: number) => {
   // 查找房源详情（从搜索结果或热门推荐中查找）
   const property = searchResults.value.find(p => p.propertyId === propertyId) ||
                    hotProperties.value.find(p => p.propertyId === propertyId)
@@ -530,13 +830,67 @@ const viewProperty = (propertyId: number) => {
   if (property) {
     selectedProperty.value = property
     showPropertyModal.value = true
+
+    // 记录浏览
+    try {
+      const userId = 1 // 暂时使用固定用户ID，后续从store获取
+      await queryAPI.recordBrowse(userId, propertyId)
+    } catch (error) {
+      console.error('记录浏览失败:', error)
+    }
   } else {
     alert('房源信息未找到')
   }
 }
 
+// 查看推荐的房源（其他用户也在看）
+const viewRecommendationProperty = async (item: RecommendationItem) => {
+  // 构建PropertyDetail对象
+  const property: PropertyDetail = {
+    propertyId: item.propertyId,
+    title: item.title,
+    status: 'for_sale',
+    communityName: '',
+    viewCount: 0,
+    favoriteCount: 0,
+    updatedAt: new Date().toISOString(),
+    priceInfo: {
+      total_price: item.totalPrice || 0,
+      unit_price: 0
+    },
+    layoutInfo: {
+      bedroom_count: 0,
+      living_room_count: 0,
+      bathroom_count: 0,
+      area: 0
+    },
+    basicInfo: {
+      property_type: 'apartment',
+      build_year: 0
+    },
+    locationInfo: {
+      province: '',
+      city: '',
+      district: ''
+    }
+  }
+
+  selectedProperty.value = property
+  showPropertyModal.value = true
+
+  // 记录浏览（来源：recommendation）
+  if (currentUserId.value) {
+    try {
+      await queryAPI.recordBrowse(currentUserId.value, item.propertyId, 'recommendation')
+      console.log('记录推荐房源浏览成功')
+    } catch (error) {
+      console.error('记录推荐房源浏览失败:', error)
+    }
+  }
+}
+
 // 处理猜你喜欢卡片点击（PropertyCard -> PropertyDetail）
-const viewDiscoverProperty = (card: PropertyCard) => {
+const viewDiscoverProperty = async (card: PropertyCard) => {
   if (!card) return
 
   // 从 summary 解析社区名、面积与卧室数量（容错处理）
@@ -580,22 +934,43 @@ const viewDiscoverProperty = (card: PropertyCard) => {
 
   selectedProperty.value = mapped
   showPropertyModal.value = true
+
+  // 记录浏览
+  if (currentUserId.value) {
+    try {
+      await queryAPI.recordBrowse(currentUserId.value, card.propertyId)
+    } catch (error) {
+      console.error('记录浏览失败:', error)
+    }
+  }
 }
 
 // 处理收藏
 const handleFavorite = async (propertyId: number) => {
   try {
-    const userId = 1 // 暂时使用固定用户ID，后续从store获取
-    await queryAPI.addFavorite(userId, propertyId)
+    if (!currentUserId.value) {
+      alert('请先登录')
+      return
+    }
+
+    console.log('收藏请求 - userId:', currentUserId.value, 'propertyId:', propertyId)
+    const response = await queryAPI.addFavorite(currentUserId.value, propertyId)
+    console.log('收藏成功响应:', response)
     alert('收藏成功！')
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('收藏失败:', error)
-    alert('收藏失败，请重试')
+    let errorMsg = '收藏失败，请重试'
+    if (error && typeof error === 'object') {
+      const err = error as { response?: { data?: { message?: string } }; message?: string }
+      console.error('错误详情:', err.response?.data)
+      errorMsg = err.response?.data?.message || err.message || errorMsg
+    }
+    alert(errorMsg)
   }
 }
 
 // 处理购买
-const handlePurchase = async (property: PropertyDetail) => {
+const handlePurchase = async (property: PropertyDetail | PopularProperty) => {
   // 这里可以实现购买逻辑，比如跳转到购买页面或调用购买API
   alert(`正在处理购买房源: ${property.title}\n价格: ¥${property.priceInfo?.total_price}万`)
 
@@ -728,23 +1103,21 @@ const clearAllHistory = () => {
 // 加载热门推荐
 const loadHotProperties = async () => {
   try {
-    // 查询热门房源（浏览次数多的）
-    const response = await queryAPI.searchProperties({
-      minViewCount: 10,
-      status: 'for_sale'
-    })
-    hotProperties.value = response.items.slice(0, 4) // 取前4个
+    // 调用热门推荐接口
+    const response = await queryAPI.getPopularRecommendations()
+    hotProperties.value = response.items
   } catch (error) {
     console.error('获取热门推荐失败:', error)
     // fallback到模拟数据
-    hotProperties.value = getMockSearchResults()
+    hotProperties.value = getMockPopularProperties()
   }
 }
 
 // 获取房源图片
-const getPropertyImage = (property: PropertyDetail) => {
-  // 使用picsum.photos根据propertyId生成稳定图片
-  return `https://picsum.photos/seed/${property.propertyId}/300/200`
+const getPropertyImage = (property: PropertyDetail | PopularProperty) => {
+  // 优先使用接口返回的cover图片，如果没有则使用picsum.photos根据propertyId生成稳定图片
+  const popularProperty = property as PopularProperty
+  return popularProperty.cover || `https://picsum.photos/seed/${property.propertyId}/300/200`
 }
 
 // 初始化
@@ -763,29 +1136,196 @@ onMounted(() => {
 <style scoped>
 .search-page {
   min-height: 100vh;
-  background: #f5f5f5;
-  padding-bottom: 60px;
+  background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #0f1419 100%);
+  position: relative;
+  overflow-x: hidden;
 }
+
+/* 豪华背景装饰 */
+.luxury-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.floating-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.15), transparent 70%);
+  animation: floatOrb 25s ease-in-out infinite;
+  filter: blur(40px);
+}
+
+.orb-1 {
+  width: 500px;
+  height: 500px;
+  top: -200px;
+  right: -150px;
+  animation-delay: 0s;
+}
+
+.orb-2 {
+  width: 400px;
+  height: 400px;
+  bottom: -100px;
+  left: -150px;
+  animation-delay: 8s;
+}
+
+.orb-3 {
+  width: 350px;
+  height: 350px;
+  top: 40%;
+  right: 20%;
+  animation-delay: 15s;
+}
+
+@keyframes floatOrb {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  33% {
+    transform: translate(50px, -50px) scale(1.1);
+    opacity: 0.5;
+  }
+  66% {
+    transform: translate(-30px, 40px) scale(0.95);
+    opacity: 0.4;
+  }
+}
+
 .search-keyword {
   margin-left: 10px;
-  color: #007bff;
+  color: #667eea;
   font-size: 12px;
   font-style: italic;
+  font-weight: 500;
 }
+
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background: white;
-  border-bottom: 1px solid #eee;
+  padding: 20px 40px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.98) 100%);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2),
+    inset 0 1px 0 rgba(212, 175, 55, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(20px);
+  gap: 40px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .logo {
-  font-size: 20px;
-  font-weight: bold;
-  color: #007bff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.logo-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 2px 8px rgba(212, 175, 55, 0.5));
+  animation: iconFloat 3s ease-in-out infinite;
+}
+
+@keyframes iconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.logo-text {
+  font-size: 24px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 10px rgba(212, 175, 55, 0.3);
+}
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
+.logo:hover .logo-icon {
+  transform: translateY(-5px) rotate(5deg);
+}
+
+.top-nav {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  max-width: 400px;
+}
+
+.nav-link {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(212, 175, 55, 0.6);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.nav-link:hover::before {
+  opacity: 1;
+}
+
+.nav-link:hover {
+  border-color: rgba(212, 175, 55, 0.3);
+  color: #d4af37;
+  transform: translateY(-2px);
+}
+
+.nav-link.active {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(255, 215, 0, 0.15) 100%);
+  color: #ffd700;
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow:
+    0 4px 15px rgba(212, 175, 55, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.nav-link.active::before {
+  opacity: 1;
+}
+
+.nav-icon {
+  font-size: 18px;
+  filter: drop-shadow(0 0 4px currentColor);
 }
 
 .header-actions {
@@ -794,56 +1334,162 @@ onMounted(() => {
 }
 
 .icon-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.8) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  font-size: 20px;
   cursor: pointer;
-  padding: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.icon-btn:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 6px 20px rgba(212, 175, 55, 0.3),
+    0 0 0 1px rgba(212, 175, 55, 0.5);
+  border-color: #d4af37;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(255, 215, 0, 0.2) 100%);
 }
 
 .search-section {
-  background: white;
-  padding: 20px;
-  border-bottom: 1px solid #eee;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.9) 100%);
+  padding: 32px 40px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
+  position: relative;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.search-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d4af37, transparent);
+  animation: shimmerLine 3s ease-in-out infinite;
+}
+
+@keyframes shimmerLine {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.8; }
 }
 
 .search-box {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  position: relative;
 }
 
 .search-box input {
   flex: 1;
-  padding: 12px 16px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  padding: 18px 24px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
   font-size: 16px;
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #e8e8e8;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: #d4af37;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 4px rgba(212, 175, 55, 0.15),
+    0 4px 20px rgba(212, 175, 55, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.search-box input::placeholder {
+  color: rgba(212, 175, 55, 0.5);
 }
 
 .search-btn {
-  padding: 12px 20px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 8px;
+  padding: 18px 40px;
+  background: linear-gradient(135deg, #d4af37 0%, #ffd700 100%);
+  color: #1a1a2e;
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  border-radius: 16px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow:
+    0 6px 20px rgba(212, 175, 55, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.search-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.6s ease;
+}
+
+.search-btn:hover::before {
+  left: 100%;
+}
+
+.search-btn:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 10px 30px rgba(212, 175, 55, 0.5),
+    0 0 0 1px rgba(255, 215, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  border-color: #ffd700;
+}
+
+.search-btn:active {
+  transform: translateY(-1px);
 }
 
 .suggestions {
-  margin-top: 10px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.98) 100%);
+  border-radius: 16px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
   overflow: hidden;
-  max-height: 300px;
+  max-height: 450px;
   overflow-y: auto;
+  animation: slideDown 0.4s ease;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .history-section,
 .hot-search-section {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
 }
 
 .history-section:last-child,
@@ -852,22 +1498,27 @@ onMounted(() => {
 }
 
 .section-title {
-  padding: 8px 16px;
-  font-size: 12px;
-  color: #999;
+  padding: 16px 24px;
+  font-size: 11px;
+  color: rgba(212, 175, 55, 0.8);
   text-transform: uppercase;
-  background: #f8f9fa;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.05) 0%, rgba(255, 215, 0, 0.05) 100%);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
 }
 
 .suggestion-item {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.05);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
 }
 
 .suggestion-item:hover {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0%, rgba(255, 215, 0, 0.05) 100%);
+  transform: translateX(8px);
+  border-left: 3px solid #d4af37;
 }
 
 .history-item {
@@ -879,163 +1530,219 @@ onMounted(() => {
 .history-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   flex: 1;
 }
 
 .history-keyword {
-  font-size: 14px;
-  color: #333;
+  font-size: 15px;
+  color: #ffd700;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(212, 175, 55, 0.2);
 }
 
 .history-meta {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   font-size: 12px;
-  color: #999;
+  color: rgba(212, 175, 55, 0.6);
 }
 
 .search-count {
-  color: #007bff;
-  font-weight: 500;
+  color: #ffd700;
+  font-weight: 600;
+  background: rgba(212, 175, 55, 0.15);
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 .search-time {
-  color: #666;
+  color: rgba(212, 175, 55, 0.5);
 }
 
 .delete-history {
-  color: #ccc;
+  color: rgba(212, 175, 55, 0.5);
   cursor: pointer;
-  padding: 4px 8px;
-  font-size: 18px;
-  transition: color 0.2s;
+  padding: 6px 10px;
+  font-size: 20px;
+  transition: all 0.3s ease;
+  border-radius: 8px;
 }
 
 .delete-history:hover {
-  color: #ff4757;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.15);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.2);
 }
 
 .clear-history {
   text-align: center;
-  padding: 12px 16px;
-  color: #007bff;
+  padding: 14px 20px;
+  color: #d4af37;
   cursor: pointer;
-  border-top: 1px solid #f0f0f0;
+  border-top: 2px solid rgba(212, 175, 55, 0.2);
   font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 .clear-history:hover {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(255, 215, 0, 0.1));
+  color: #ffd700;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
 }
 
 /* 热门搜索样式 */
 .hot-search-section {
-  padding: 8px 16px;
+  padding: 12px 20px 16px;
 }
 
 .hot-search-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .hot-search-tag {
-  display: inline-block;
-  padding: 4px 8px;
-  background: linear-gradient(135deg, #ff6b6b, #ffa500);
-  color: white;
-  border-radius: 12px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.4);
+  border: 1px solid rgba(255, 215, 0, 0.5);
 }
 
 .hot-search-tag:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(212, 175, 55, 0.6);
+  border-color: #ffd700;
 }
 
 .quick-filters {
-  background: white;
-  padding: 15px 20px;
-  border-bottom: 1px solid #eee;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.9));
+  padding: 18px 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .filter-tags {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   overflow-x: auto;
   padding-bottom: 5px;
 }
 
+.filter-tags::-webkit-scrollbar {
+  height: 4px;
+}
+
+.filter-tags::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
 .filter-tag {
-  padding: 6px 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 16px;
+  padding: 10px 20px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 20px;
   font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.3s ease;
+  background: rgba(26, 26, 46, 0.6);
+  color: rgba(212, 175, 55, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.filter-tag:hover {
+  border-color: #d4af37;
+  background: rgba(212, 175, 55, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
 }
 
 .filter-tag.active {
-  background: #007bff;
-  color: white;
-  border-color: #007bff;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.5);
+  font-weight: 700;
 }
 
 .content-area {
-  padding: 0 20px;
+  padding: 0 24px;
 }
 
 .tab-container {
   display: flex;
   background: white;
-  border-radius: 8px 8px 0 0;
-  margin-top: 15px;
+  border-radius: 16px;
+  margin-top: 20px;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 8px;
+  gap: 6px;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 15px;
-  background: none;
-  border: none;
-  font-size: 14px;
-  font-weight: 500;
+  padding: 16px 24px;
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  border-radius: 12px;
+  color: rgba(212, 175, 55, 0.7);
+}
+
+.tab-btn:hover {
+  background: rgba(212, 175, 55, 0.1);
+  color: #ffd700;
+  border-color: rgba(212, 175, 55, 0.4);
 }
 
 .tab-btn.active {
-  background: #007bff;
-  color: white;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+  border-color: #d4af37;
 }
 
 .tab-content {
-  background: white;
-  padding: 20px;
-  border-radius: 0 0 8px 8px;
+  background: transparent;
+  padding: 24px 0;
   min-height: 400px;
 }
 
 .loading-state {
   text-align: center;
-  padding: 40px 0;
-  color: #666;
+  padding: 80px 0;
+  color: rgba(212, 175, 55, 0.7);
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #007bff;
+  width: 60px;
+  height: 60px;
+  border: 5px solid rgba(212, 175, 55, 0.2);
+  border-top: 5px solid #d4af37;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 28px;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
 }
 
 @keyframes spin {
@@ -1049,164 +1756,305 @@ onMounted(() => {
 
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
-  color: #666;
+  padding: 100px 20px;
+  color: rgba(212, 175, 55, 0.7);
+}
+
+.empty-state h3 {
+  color: #ffd700;
+  font-size: 22px;
+  margin-bottom: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.empty-state p {
+  color: rgba(212, 175, 55, 0.7);
+  font-size: 14px;
+  margin-bottom: 28px;
 }
 
 .empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  font-size: 80px;
+  margin-bottom: 28px;
+  opacity: 0.6;
+  filter: drop-shadow(0 4px 8px rgba(212, 175, 55, 0.3));
 }
 
 .reset-btn {
-  margin-top: 20px;
-  padding: 10px 20px;
-  background: #007bff;
-  color: white;
+  margin-top: 24px;
+  padding: 16px 40px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+  transition: all 0.3s ease;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.reset-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(212, 175, 55, 0.6);
 }
 
 .results-count {
-  margin-bottom: 16px;
-  color: #666;
-  font-size: 14px;
+  margin-bottom: 24px;
+  color: #d4af37;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.9));
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  letter-spacing: 0.3px;
 }
 
 .property-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  justify-items: center;
 }
 
 .property-card {
-  background: white;
-  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.85) 0%, rgba(22, 33, 62, 0.9) 100%);
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
 }
 
 .property-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-8px);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(212, 175, 55, 0.5),
+    0 0 20px rgba(212, 175, 55, 0.3);
+  border-color: #d4af37;
 }
 
 .property-image {
   width: 100%;
-  height: 200px;
+  height: 220px;
   object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.property-card:hover .property-image {
+  transform: scale(1.05);
 }
 
 .property-info {
-  padding: 16px;
+  padding: 20px;
 }
 
 .property-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #333;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: #ffd700;
+  line-height: 1.4;
+  letter-spacing: 0.3px;
 }
 
 .property-location {
-  color: #666;
+  color: rgba(212, 175, 55, 0.7);
   font-size: 14px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
+  font-weight: 500;
 }
 
 .property-meta {
   display: flex;
-  gap: 12px;
-  margin-bottom: 10px;
-  color: #888;
+  gap: 16px;
+  margin-bottom: 16px;
+  color: rgba(212, 175, 55, 0.6);
   font-size: 13px;
 }
 
+.property-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .property-price {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(255, 215, 0, 0.1));
+  border-radius: 12px;
+  display: inline-block;
+  border: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 .price {
-  font-size: 20px;
-  font-weight: 700;
-  color: #ff4757;
+  font-size: 26px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 2px 4px rgba(212, 175, 55, 0.3);
 }
 
 .unit {
-  color: #888;
+  color: #d4af37;
   font-size: 14px;
-  margin-left: 2px;
+  margin-left: 4px;
+  font-weight: 600;
+}
+
+.unit-price {
+  color: rgba(212, 175, 55, 0.6);
+  font-size: 12px;
+  margin-left: 8px;
 }
 
 .property-tags {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .tag {
-  padding: 4px 8px;
-  background: #e3f2fd;
-  color: #1976d2;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
+  padding: 7px 14px;
+  background: rgba(212, 175, 55, 0.15);
+  color: #d4af37;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  transition: all 0.3s ease;
+}
+
+.tag:hover {
+  background: rgba(212, 175, 55, 0.25);
+  border-color: rgba(212, 175, 55, 0.5);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 24px;
+  padding: 18px 24px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.9));
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.section-header h3 {
+  font-size: 22px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.5px;
 }
 
 .refresh-btn {
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
-  padding: 8px 12px;
-  border-radius: 6px;
+  background: rgba(26, 26, 46, 0.8);
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  padding: 12px 24px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 600;
+  color: #d4af37;
+  transition: all 0.3s ease;
+}
+
+.refresh-btn:hover {
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
+  border-color: transparent;
+  transform: rotate(180deg);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
 }
 
 .discover-hint {
   text-align: center;
-  padding: 20px;
-  color: #666;
-  background: #f8f9fa;
-  border-radius: 8px;
-  margin-bottom: 15px;
+  padding: 28px;
+  color: rgba(212, 175, 55, 0.8);
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.7), rgba(22, 33, 62, 0.8));
+  border-radius: 16px;
+  margin-bottom: 24px;
+  border: 2px dashed rgba(212, 175, 55, 0.3);
+  backdrop-filter: blur(10px);
 }
 
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  background: white;
-  border-top: 1px solid #e0e0e0;
-  padding: 8px 0;
+.discover-hint p {
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.3px;
 }
 
-.nav-btn {
-  flex: 1;
-  background: none;
-  border: none;
-  padding: 8px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+/* 其他用户也在看 */
+.others-section {
+  margin-top: 36px;
+  padding: 28px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.85), rgba(22, 33, 62, 0.9));
+  border-radius: 20px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.others-section .section-header {
+  margin-bottom: 20px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-source-badge {
+  display: inline-block;
+  padding: 7px 16px;
+  background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+  color: #0f1419;
+  border-radius: 20px;
   font-size: 12px;
-  color: #666;
-  transition: color 0.3s ease;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
 }
 
-.nav-btn.active {
-  color: #007bff;
+.recommendation-card {
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.recommendation-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.25);
+  transform: translateY(-4px);
+}
+
+.similarity-score {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(255, 215, 0, 0.15));
+  color: #ffd700;
+  padding: 7px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: auto;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  box-shadow: 0 2px 6px rgba(212, 175, 55, 0.2);
 }
 </style>
+
+```

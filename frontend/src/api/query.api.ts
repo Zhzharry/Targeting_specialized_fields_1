@@ -3,7 +3,8 @@ import type {
   QueryParams,
   QueryResponse,
   PropertyCardList,
-  FavoriteResponse
+  FavoriteResponse,
+  PopularRecommendationResponse
 } from '../types/api.types'
 
 export const queryAPI = {
@@ -26,6 +27,15 @@ export const queryAPI = {
     })
   },
 
+  // 3.4 记录房源浏览
+  recordBrowse(userId: number, propertyId: number, source?: 'history' | 'favorite' | 'recommendation'): Promise<{ message: string; userId: number; propertyId: number }> {
+    const params: Record<string, string | number> = { userId, propertyId }
+    if (source) {
+      params.source = source
+    }
+    return api.post('/query/browse', null, { params })
+  },
+
   // 2.3 猜你喜欢列表 - 这个其实应该放在auth.api.ts，因为属于主页模块
   // 但既然已经在queryAPI里了，先保持原样，或者可以移动到auth.api.ts
   getGuessYouLike(): Promise<PropertyCardList> {
@@ -35,5 +45,10 @@ export const queryAPI = {
   // 2.4 查询页入口推荐
   getQueryRecommendations(): Promise<PropertyCardList> {
     return api.get('/home/go-query')
+  },
+
+  // 2.4 热门推荐
+  getPopularRecommendations(): Promise<PopularRecommendationResponse> {
+    return api.get('/home/popular')
   }
 }

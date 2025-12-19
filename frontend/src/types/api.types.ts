@@ -95,6 +95,31 @@ export interface PropertyCardList {
   message: string
 }
 
+// ==================== 热门推荐 ====================
+export interface PopularProperty {
+  propertyId: number
+  title: string
+  summary: string
+  totalPrice: number
+  viewCount: number
+  favoriteCount: number
+  priceInfo: PriceInfo
+  layoutInfo: LayoutInfo
+  basicInfo: BasicInfo
+  locationInfo: LocationInfo
+  community_name: string
+  cover: string
+  detailUrl: string
+  tags: string[]
+}
+
+export interface PopularRecommendationResponse {
+  items: PopularProperty[]
+  count: number
+  totalCandidates: number
+  message: string
+}
+
 // ==================== 查询模块 ====================
 export interface QueryParams {
   keyword?: string
@@ -110,11 +135,14 @@ export interface QueryParams {
   maxArea?: number
   minViewCount?: number
   maxViewCount?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
 }
 
 export interface PriceInfo {
   total_price: number
   unit_price: number
+  price_history?: any[]
 }
 
 export interface LayoutInfo {
@@ -122,17 +150,22 @@ export interface LayoutInfo {
   living_room_count: number
   bathroom_count: number
   area: number
+  floor?: number
+  orientation?: string
+  total_floors?: number
 }
 
 export interface BasicInfo {
   property_type: string
   build_year: number
+  decoration?: string
 }
 
 export interface LocationInfo {
   province: string
   city: string
   district: string
+  address?: string
 }
 
 export interface PropertyDetail {
@@ -288,4 +321,32 @@ export interface ErrorResponse {
   timestamp?: string
   status?: number
   path?: string
+}
+
+// ==================== 推荐模块 ====================
+export interface RecommendationItem {
+  propertyId: number
+  title: string
+  summary: string
+  score: number
+  source: string
+  cover: string
+  totalPrice?: number
+  tags?: string[]
+}
+
+export interface OthersAlsoViewedParams {
+  userId: number
+  limit?: number
+  excludeViewed?: boolean
+  useCache?: boolean
+}
+
+export interface OthersAlsoViewedResponse {
+  items: RecommendationItem[]
+  count: number
+  userId: number
+  dataSource: string
+  lastHadoopUpdate?: string
+  message: string
 }

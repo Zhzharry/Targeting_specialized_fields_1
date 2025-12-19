@@ -120,7 +120,7 @@ public class QueryController {
         String sql = "DELETE FROM favorites WHERE user_id = ? AND property_id = ?";
 
         try (Connection connection = getConnection();
-             PreparedStatement ps = connection.prepareStatement(sql)) {
+                PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, userId);
             ps.setLong(2, propertyId);
             int affected = ps.executeUpdate();
@@ -265,7 +265,9 @@ public class QueryController {
             @RequestParam(value = "minArea", required = false) Double minArea,
             @RequestParam(value = "maxArea", required = false) Double maxArea,
             @RequestParam(value = "minViewCount", required = false) Integer minViewCount,
-            @RequestParam(value = "maxViewCount", required = false) Integer maxViewCount) {
+            @RequestParam(value = "maxViewCount", required = false) Integer maxViewCount,
+            @RequestParam(value = "sortBy", required = false, defaultValue = "updated_at") String sortBy,
+            @RequestParam(value = "sortOrder", required = false, defaultValue = "desc") String sortOrder) {
 
         String baseSql = "SELECT p.property_id, p.title, p.status, p.price_info, p.layout_info, p.basic_info, " +
                 "p.view_count, p.favorite_count, p.updated_at, c.name AS community_name, c.location_info " +
@@ -287,12 +289,14 @@ public class QueryController {
         }
 
         if (minPrice != null) {
-            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.price_info,'$.total_price')) AS DECIMAL(12,2)) >= ?");
+            sqlBuilder.append(
+                    " AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.price_info,'$.total_price')) AS DECIMAL(12,2)) >= ?");
             params.add(minPrice);
         }
 
         if (maxPrice != null) {
-            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.price_info,'$.total_price')) AS DECIMAL(12,2)) <= ?");
+            sqlBuilder.append(
+                    " AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.price_info,'$.total_price')) AS DECIMAL(12,2)) <= ?");
             params.add(maxPrice);
         }
 
@@ -312,12 +316,14 @@ public class QueryController {
         }
 
         if (minBedrooms != null) {
-            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.bedroom_count')) AS UNSIGNED) >= ?");
+            sqlBuilder
+                    .append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.bedroom_count')) AS UNSIGNED) >= ?");
             params.add(minBedrooms);
         }
 
         if (maxBedrooms != null) {
-            sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.bedroom_count')) AS UNSIGNED) <= ?");
+            sqlBuilder
+                    .append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.bedroom_count')) AS UNSIGNED) <= ?");
             params.add(maxBedrooms);
         }
 
@@ -341,10 +347,36 @@ public class QueryController {
             params.add(maxViewCount);
         }
 
-        sqlBuilder.append(" ORDER BY p.updated_at DESC LIMIT 20");
+        // Validate sortBy parameter
+        String validSortBy = "updated_at"; // default
+        if ("price".equals(sortBy) || "area".equals(sortBy) || "view_count".equals(sortBy)
+                || "updated_at".equals(sortBy)) {
+            validSortBy = sortBy;
+        }
+
+        // Validate sortOrder parameter
+        String validSortOrder = "desc"; // default
+        if ("asc".equalsIgnoreCase(sortOrder) || "desc".equalsIgnoreCase(sortOrder)) {
+            validSortOrder = sortOrder.toLowerCase();
+        }
+
+        // Build ORDER BY clause
+        String orderByClause = " ORDER BY ";
+        if ("price".equals(validSortBy)) {
+            orderByClause += "CAST(JSON_UNQUOTE(JSON_EXTRACT(p.price_info,'$.total_price')) AS DECIMAL(12,2))";
+        } else if ("area".equals(validSortBy)) {
+            orderByClause += "CAST(JSON_UNQUOTE(JSON_EXTRACT(p.layout_info,'$.area')) AS DECIMAL(12,2))";
+        } else if ("view_count".equals(validSortBy)) {
+            orderByClause += "p.view_count";
+        } else {
+            orderByClause += "p.updated_at";
+        }
+        orderByClause += " " + validSortOrder + " LIMIT 20";
+
+        sqlBuilder.append(orderByClause);
 
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(sqlBuilder.toString())) {
+                PreparedStatement statement = connection.prepareStatement(sqlBuilder.toString())) {
 
             for (int i = 0; i < params.size(); i++) {
                 statement.setObject(i + 1, params.get(i));
