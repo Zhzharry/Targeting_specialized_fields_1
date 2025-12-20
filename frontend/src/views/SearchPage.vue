@@ -784,7 +784,7 @@ const performSearch = async () => {
     console.log('搜索API响应:', response)
     
     if (response && response.items) {
-      searchResults.value = response.items
+    searchResults.value = response.items
       console.log('搜索结果数量:', response.items.length)
       if (response.items.length === 0) {
         console.warn('搜索返回空结果，关键词:', searchQuery.value)
@@ -892,12 +892,12 @@ const viewProperty = async (propertyId: number) => {
   } catch (error) {
     console.error('获取房源详情失败:', error)
     // 降级处理：如果新接口失败，尝试使用旧的方式
-    const property = searchResults.value.find(p => p.propertyId === propertyId) ||
-                     hotProperties.value.find(p => p.propertyId === propertyId)
-    if (property) {
-      selectedProperty.value = property
-      showPropertyModal.value = true
-      
+  const property = searchResults.value.find(p => p.propertyId === propertyId) ||
+                   hotProperties.value.find(p => p.propertyId === propertyId)
+  if (property) {
+    selectedProperty.value = property
+    showPropertyModal.value = true
+
       // 尝试记录浏览
       if (currentUserId.value) {
         try {
@@ -905,9 +905,9 @@ const viewProperty = async (propertyId: number) => {
         } catch (err) {
           console.error('记录浏览失败:', err)
         }
-      }
-    } else {
-      alert('房源信息未找到')
+    }
+  } else {
+    alert('房源信息未找到')
     }
   }
 }
@@ -929,40 +929,40 @@ const viewRecommendationProperty = async (item: RecommendationItem) => {
       showPropertyModal.value = true
     } else {
       // 降级处理：如果接口失败，使用原有逻辑
-      const property: PropertyDetail = {
-        propertyId: item.propertyId,
-        title: item.title,
-        status: 'for_sale',
-        communityName: '',
-        viewCount: 0,
-        favoriteCount: 0,
-        updatedAt: new Date().toISOString(),
-        priceInfo: {
-          total_price: item.totalPrice || 0,
-          unit_price: 0
-        },
-        layoutInfo: {
-          bedroom_count: 0,
-          living_room_count: 0,
-          bathroom_count: 0,
-          area: 0
-        },
-        basicInfo: {
-          property_type: 'apartment',
-          build_year: 0
-        },
-        locationInfo: {
-          province: '',
-          city: '',
-          district: ''
+  const property: PropertyDetail = {
+    propertyId: item.propertyId,
+    title: item.title,
+    status: 'for_sale',
+    communityName: '',
+    viewCount: 0,
+    favoriteCount: 0,
+    updatedAt: new Date().toISOString(),
+    priceInfo: {
+      total_price: item.totalPrice || 0,
+      unit_price: 0
+    },
+    layoutInfo: {
+      bedroom_count: 0,
+      living_room_count: 0,
+      bathroom_count: 0,
+      area: 0
+    },
+    basicInfo: {
+      property_type: 'apartment',
+      build_year: 0
+    },
+    locationInfo: {
+      province: '',
+      city: '',
+      district: ''
         },
         isFavorited: false
       } as any
 
-      selectedProperty.value = property
-      showPropertyModal.value = true
+  selectedProperty.value = property
+  showPropertyModal.value = true
     }
-  } catch (error) {
+    } catch (error) {
     console.error('获取推荐房源详情失败:', error)
     alert('获取房源详情失败')
   }
@@ -1055,9 +1055,9 @@ const handleFavorite = async (propertyId: number) => {
       alert('已取消收藏！')
     } else {
       // 添加收藏
-      console.log('收藏请求 - userId:', currentUserId.value, 'propertyId:', propertyId)
+    console.log('收藏请求 - userId:', currentUserId.value, 'propertyId:', propertyId)
       await queryAPI.addFavorite(currentUserId.value, propertyId)
-      alert('收藏成功！')
+    alert('收藏成功！')
     }
 
     // 重新获取房源详情，更新收藏状态和收藏次数

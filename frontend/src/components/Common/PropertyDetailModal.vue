@@ -147,7 +147,7 @@ watch(() => props.property, async (newProperty) => {
     } else if (authStore.isLoggedIn && authStore.userId) {
       // 否则通过API检查
       // 注意：这个检查会在getPropertyDetail接口调用时完成，这里只是备用
-      isFavorited.value = false
+    isFavorited.value = false
     }
   }
 }, { immediate: true })

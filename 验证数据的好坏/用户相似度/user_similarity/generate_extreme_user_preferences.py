@@ -6,10 +6,19 @@
 功能：
 1. 使用数据库中已存在的用户
 2. 为这些用户插入极端相似的偏好数据（用于测试高相似度）
+   - 预算相似度（45%权重）
+   - 位置相似度（35%权重）
+   - 房源类型相似度（20%权重）
 3. 为这些用户插入极端不相似的偏好数据（用于测试低相似度）
-4. 为这些用户插入收藏数据
+4. 为这些用户插入收藏数据（60%权重）
+5. 为这些用户插入浏览历史数据（10%权重）
 
 注意：本脚本只插入数据，不做任何相似度计算
+
+相似度计算法则：
+- 偏好相似度（30%）：预算45% + 位置35% + 房源类型20%
+- 浏览历史相似度（10%）
+- 收藏相似度（60%）
 
 使用方法：
     python generate_extreme_user_preferences.py
@@ -61,8 +70,8 @@ SHENZHEN_DISTRICTS = [
     "龙岗区", "龙华区", "盐田区", "坪山区", "光明区", "大鹏新区"
 ]
 
-# 家庭结构类型
-FAMILY_STRUCTURES = ["single", "couple", "family", "extended_family"]
+# 房源类型
+PROPERTY_TYPES = ["住宅", "公寓", "别墅", "商铺", "写字楼"]
 
 # 预算范围（万元）
 BUDGET_RANGES = [
@@ -143,18 +152,18 @@ def create_similar_user_profiles(user_ids: List[int]) -> List[Dict]:
     """
     为指定用户创建极端相似的偏好配置（用于测试高相似度）
     这些用户具有：
-    - 相同的预算范围
-    - 相同的家庭结构
-    - 相同或高度重叠的偏好地区
+    - 相同的预算范围（预算相似度45%权重）
+    - 相同或高度重叠的偏好地区（位置相似度35%权重）
+    - 相同的偏好房源类型（房源类型相似度20%权重）
     """
     print(f"\n{'='*60}")
     print(f"Creating EXTREMELY SIMILAR preferences for {len(user_ids)} users (for high similarity testing)")
     print(f"{'='*60}")
     
-    # 选择一个固定的配置作为模板
+    # 选择一个固定的配置作为模板（所有用户完全相同）
     base_budget = BUDGET_RANGES[2]  # 400-600万
-    base_family = "couple"
     base_locations = ["南山区", "福田区"]
+    base_property_type = "住宅"
     
     user_profiles = []
     for user_id in user_ids:
@@ -164,8 +173,8 @@ def create_similar_user_profiles(user_ids: List[int]) -> List[Dict]:
                 "min": base_budget[0],
                 "max": base_budget[1]
             },
-            "family_structure": base_family,
-            "preferred_locations": base_locations.copy()  # 完全相同的地区偏好
+            "preferred_locations": base_locations.copy(),  # 完全相同的地区偏好
+            "preferred_property_type": base_property_type  # 完全相同的房源类型
         }
         
         user_profiles.append({
@@ -174,9 +183,9 @@ def create_similar_user_profiles(user_ids: List[int]) -> List[Dict]:
         })
         
         print(f"  User {user_id}")
-        print(f"    Budget: {base_budget[0]}-{base_budget[1]}万")
-        print(f"    Family: {base_family}")
-        print(f"    Locations: {', '.join(base_locations)}")
+        print(f"    Budget: {base_budget[0]}-{base_budget[1]}万 (45% weight)")
+        print(f"    Locations: {', '.join(base_locations)} (35% weight)")
+        print(f"    Property Type: {base_property_type} (20% weight)")
     
     return user_profiles
 
@@ -186,8 +195,8 @@ def create_dissimilar_user_profiles(user_ids: List[int]) -> List[Dict]:
     为指定用户创建极端不相似的偏好配置（用于测试低相似度）
     这些用户具有：
     - 完全不同的预算范围（一个很高，一个很低）
-    - 不同的家庭结构
     - 完全不重叠的偏好地区
+    - 不同的偏好房源类型
     """
     print(f"\n{'='*60}")
     print(f"Creating EXTREMELY DISSIMILAR preferences for {len(user_ids)} users (for low similarity testing)")
@@ -195,33 +204,33 @@ def create_dissimilar_user_profiles(user_ids: List[int]) -> List[Dict]:
     
     # 创建完全不同的配置
     dissimilar_configs = [
-        # 高预算 vs 低预算
+        # 高预算 vs 低预算，不同地区，不同类型
         {
             'budget': BUDGET_RANGES[5],  # 800-1000万
-            'family': 'extended_family',
-            'locations': ['南山区', '福田区']
+            'locations': ['南山区', '福田区'],
+            'property_type': '别墅'
         },
         {
             'budget': BUDGET_RANGES[0],  # 200-400万
-            'family': 'single',
-            'locations': ['龙岗区', '宝安区']
+            'locations': ['龙岗区', '宝安区'],
+            'property_type': '公寓'
         },
-        # 不同家庭结构
+        # 不同预算，不同地区
         {
             'budget': BUDGET_RANGES[3],  # 500-700万
-            'family': 'family',
-            'locations': ['罗湖区']
+            'locations': ['罗湖区'],
+            'property_type': '住宅'
         },
         {
             'budget': BUDGET_RANGES[2],  # 400-600万
-            'family': 'single',
-            'locations': ['盐田区', '坪山区']
+            'locations': ['盐田区', '坪山区'],
+            'property_type': '商铺'
         },
         # 完全不重叠的地区
         {
             'budget': BUDGET_RANGES[4],  # 600-800万
-            'family': 'couple',
-            'locations': ['光明区', '大鹏新区']
+            'locations': ['光明区', '大鹏新区'],
+            'property_type': '写字楼'
         }
     ]
     
@@ -235,8 +244,8 @@ def create_dissimilar_user_profiles(user_ids: List[int]) -> List[Dict]:
                 "min": config['budget'][0],
                 "max": config['budget'][1]
             },
-            "family_structure": config['family'],
-            "preferred_locations": config['locations']
+            "preferred_locations": config['locations'],
+            "preferred_property_type": config['property_type']
         }
         
         user_profiles.append({
@@ -245,9 +254,9 @@ def create_dissimilar_user_profiles(user_ids: List[int]) -> List[Dict]:
         })
         
         print(f"  User {user_id}")
-        print(f"    Budget: {config['budget'][0]}-{config['budget'][1]}万")
-        print(f"    Family: {config['family']}")
-        print(f"    Locations: {', '.join(config['locations'])}")
+        print(f"    Budget: {config['budget'][0]}-{config['budget'][1]}万 (45% weight)")
+        print(f"    Locations: {', '.join(config['locations'])} (35% weight)")
+        print(f"    Property Type: {config['property_type']} (20% weight)")
     
     return user_profiles
 
@@ -346,6 +355,167 @@ def create_favorites_for_dissimilar_users(connection, user_ids: List[int], prope
     connection.commit()
 
 
+def create_browsing_history_for_similar_users(connection, user_ids: List[int], property_ids: List[int]):
+    """
+    为相似用户创建浏览历史数据
+    这些用户会浏览大量相同的房源（高相似度，10%权重）
+    """
+    print(f"\n{'='*60}")
+    print(f"Creating browsing history for SIMILAR users (high overlap, 10% weight)")
+    print(f"{'='*60}")
+    
+    if not property_ids or len(property_ids) < 20:
+        print(f"  ⚠ Warning: Not enough properties (need at least 20, got {len(property_ids)}). Skipping browsing history creation.")
+        return
+    
+    # 选择一组共同的房源（所有相似用户都浏览这些）
+    # 确保有足够的房源
+    start_idx = min(20, len(property_ids) - 15)
+    end_idx = min(35, len(property_ids))
+    common_properties = property_ids[start_idx:end_idx] if end_idx > start_idx else property_ids[start_idx:]
+    
+    if not common_properties:
+        print(f"  ⚠ Warning: No common properties selected. Skipping browsing history creation.")
+        return
+    
+    print(f"  Selected {len(common_properties)} common properties (indices {start_idx}-{end_idx-1})")
+    
+    total_inserted = 0
+    total_errors = 0
+    
+    with connection.cursor() as cursor:
+        for user_id in user_ids:
+            # 每个用户浏览共同房源 + 少量个人浏览
+            browsing_properties = common_properties.copy()
+            
+            # 添加2-5个个人浏览的房源（如果有足够的房源）
+            if len(property_ids) > end_idx:
+                personal_count = min(random.randint(2, 5), len(property_ids) - end_idx)
+                personal_browsing = random.sample(property_ids[end_idx:], personal_count)
+                browsing_properties.extend(personal_browsing)
+            
+            user_inserted = 0
+            user_errors = 0
+            
+            # 插入浏览历史记录
+            for property_id in browsing_properties:
+                try:
+                    sql = """
+                        INSERT INTO browsing_history (user_id, property_id, behavior_data, created_at)
+                        VALUES (%s, %s, %s, %s)
+                    """
+                    behavior_data = json.dumps({
+                        "view_count": random.randint(1, 3),
+                        "duration": random.randint(30, 180)  # 浏览时长30-180秒
+                    }, ensure_ascii=False)
+                    
+                    created_at = datetime.now() - timedelta(days=random.randint(1, 30))  # 最近30天内
+                    
+                    rows_affected = cursor.execute(sql, (
+                        user_id,
+                        property_id,
+                        behavior_data,
+                        created_at
+                    ))
+                    
+                    if rows_affected > 0:
+                        user_inserted += 1
+                    else:
+                        user_errors += 1
+                        print(f"    Warning: No rows affected for user {user_id}, property {property_id}")
+                        
+                except Exception as e:
+                    user_errors += 1
+                    total_errors += 1
+                    print(f"    ✗ Error inserting browsing history for user {user_id}, property {property_id}: {e}")
+            
+            total_inserted += user_inserted
+            print(f"  User {user_id}: {user_inserted} browsing records inserted ({len(common_properties)} common + {len(browsing_properties) - len(common_properties)} personal)")
+            if user_errors > 0:
+                print(f"    ⚠ {user_errors} errors occurred for this user")
+    
+    connection.commit()
+    print(f"\n  ✓ Total: {total_inserted} browsing records inserted, {total_errors} errors")
+
+
+def create_browsing_history_for_dissimilar_users(connection, user_ids: List[int], property_ids: List[int]):
+    """
+    为不相似用户创建浏览历史数据
+    这些用户会浏览完全不同的房源（低相似度，甚至无重叠）
+    """
+    print(f"\n{'='*60}")
+    print(f"Creating browsing history for DISSIMILAR users (low/no overlap, 10% weight)")
+    print(f"{'='*60}")
+    
+    if not property_ids or len(property_ids) < 50:
+        print(f"  ⚠ Warning: Not enough properties (need at least 50, got {len(property_ids)}). Skipping browsing history creation.")
+        return
+    
+    if not user_ids:
+        print(f"  ⚠ Warning: No users provided. Skipping browsing history creation.")
+        return
+    
+    # 将房源分成不重叠的组
+    properties_per_user = len(property_ids) // len(user_ids) if len(user_ids) > 0 else 10
+    
+    total_inserted = 0
+    total_errors = 0
+    
+    with connection.cursor() as cursor:
+        for idx, user_id in enumerate(user_ids):
+            # 每个用户浏览不同范围的房源，确保不重叠
+            start_idx = min(50, len(property_ids) - 8) + idx * 8  # 从50开始，避免与收藏重叠，每个用户间隔8个
+            end_idx = start_idx + 8  # 每个用户浏览8个房源
+            user_properties = property_ids[start_idx:end_idx] if end_idx <= len(property_ids) else property_ids[start_idx:start_idx+8]
+            
+            if not user_properties:
+                print(f"  ⚠ Warning: No properties available for user {user_id} (start_idx={start_idx}, end_idx={end_idx})")
+                continue
+            
+            user_inserted = 0
+            user_errors = 0
+            
+            # 插入浏览历史记录
+            for property_id in user_properties:
+                try:
+                    sql = """
+                        INSERT INTO browsing_history (user_id, property_id, behavior_data, created_at)
+                        VALUES (%s, %s, %s, %s)
+                    """
+                    behavior_data = json.dumps({
+                        "view_count": random.randint(1, 2),
+                        "duration": random.randint(20, 120)
+                    }, ensure_ascii=False)
+                    
+                    created_at = datetime.now() - timedelta(days=random.randint(1, 30))
+                    
+                    rows_affected = cursor.execute(sql, (
+                        user_id,
+                        property_id,
+                        behavior_data,
+                        created_at
+                    ))
+                    
+                    if rows_affected > 0:
+                        user_inserted += 1
+                    else:
+                        user_errors += 1
+                        print(f"    Warning: No rows affected for user {user_id}, property {property_id}")
+                        
+                except Exception as e:
+                    user_errors += 1
+                    total_errors += 1
+                    print(f"    ✗ Error inserting browsing history for user {user_id}, property {property_id}: {e}")
+            
+            total_inserted += user_inserted
+            print(f"  User {user_id}: {user_inserted} browsing records inserted (property_ids: {user_properties[:5]}...)")
+            if user_errors > 0:
+                print(f"    ⚠ {user_errors} errors occurred for this user")
+    
+    connection.commit()
+    print(f"\n  ✓ Total: {total_inserted} browsing records inserted, {total_errors} errors")
+
+
 def update_user_profiles(connection, user_profiles: List[Dict]):
     """批量更新用户偏好数据（只更新user_profile字段，不创建新用户）"""
     print(f"\nUpdating user profiles for {len(user_profiles)} users...")
@@ -419,9 +589,25 @@ def verify_data(connection, similar_user_ids: List[int], dissimilar_user_ids: Li
                 ORDER BY user_id
             """, all_user_ids)
             favorites = cursor.fetchall()
-            print(f"\nFavorites created: {len(favorites)} users have favorites")
+            print(f"\nFavorites created (60% weight): {len(favorites)} users have favorites")
             for fav in favorites:
                 print(f"  User {fav[0]}: {fav[1]} favorites")
+        
+        # 检查浏览历史数据
+        if all_user_ids:
+            placeholders = ','.join(['%s'] * len(all_user_ids))
+            cursor.execute(f"""
+                SELECT user_id, COUNT(*) as browsing_count
+                FROM browsing_history
+                WHERE user_id IN ({placeholders})
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                GROUP BY user_id
+                ORDER BY user_id
+            """, all_user_ids)
+            browsing = cursor.fetchall()
+            print(f"\nBrowsing history created (10% weight): {len(browsing)} users have browsing records")
+            for browse in browsing:
+                print(f"  User {browse[0]}: {browse[1]} browsing records")
 
 
 def main():
@@ -477,8 +663,14 @@ def main():
             
             # 7. 为不相似用户创建收藏（低重叠）
             create_favorites_for_dissimilar_users(connection, dissimilar_user_ids, property_ids)
+            
+            # 8. 为相似用户创建浏览历史（高重叠，10%权重）
+            create_browsing_history_for_similar_users(connection, similar_user_ids, property_ids)
+            
+            # 9. 为不相似用户创建浏览历史（低重叠）
+            create_browsing_history_for_dissimilar_users(connection, dissimilar_user_ids, property_ids)
         
-        # 8. 验证插入的数据
+        # 10. 验证插入的数据
         verify_data(connection, similar_user_ids, dissimilar_user_ids)
         
         print("\n" + "="*60)
@@ -487,7 +679,12 @@ def main():
         print("\nSummary:")
         print(f"  - Updated preferences for {len(similar_user_ids)} similar users")
         print(f"  - Updated preferences for {len(dissimilar_user_ids)} dissimilar users")
-        print(f"  - Inserted favorite data for all users")
+        print(f"  - Inserted favorite data for all users (60% weight)")
+        print(f"  - Inserted browsing history for all users (10% weight)")
+        print("\nSimilarity calculation weights:")
+        print("  - Profile similarity: 30% (budget 45% + locations 35% + property_type 20%)")
+        print("  - Browsing similarity: 10%")
+        print("  - Favorite similarity: 60%")
         print("\nNote: This script only inserts data. Run similarity calculation separately.")
         print("="*60)
         

@@ -100,6 +100,41 @@ public class SimilarityController {
     }
 
     /**
+     * 计算指定ID范围内的房源相似度（只计算property_id < maxPropertyId的房源）
+     * POST /api/similarity/calculate/properties/range?maxPropertyId=10000
+     */
+    @PostMapping("/calculate/properties/range")
+    public ResponseEntity<Map<String, Object>> calculatePropertySimilarityByRange(
+            @RequestParam(required = true) Integer maxPropertyId) {
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            if (maxPropertyId == null || maxPropertyId <= 0) {
+                result.put("success", false);
+                result.put("message", "maxPropertyId必须大于0");
+                return ResponseEntity.badRequest().body(result);
+            }
+
+            long startTime = System.currentTimeMillis();
+            similarityService.calculatePropertySimilarityByRange(maxPropertyId);
+            long endTime = System.currentTimeMillis();
+
+            result.put("success", true);
+            result.put("message", "房源相似度计算完成（property_id < " + maxPropertyId + "）");
+            result.put("max_property_id", maxPropertyId);
+            result.put("duration_ms", endTime - startTime);
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "计算失败: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+
+    /**
      * 只执行协同过滤相似度计算
      * POST /api/similarity/calculate/cf
      */

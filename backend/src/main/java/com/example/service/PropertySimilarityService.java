@@ -161,7 +161,7 @@ public class PropertySimilarityService {
             
             // 6. 计算并保存相似度（只计算同簇内的，使用纯Java循环）
             System.out.println("\n[步骤6/6] 使用Spark RDD计算同簇内房源相似度...");
-            calculateAndSaveSimilaritiesWithRDD(clusteredRDD, clusterMap, pcaFeatures);
+            calculateAndSaveSimilaritiesWithRDD(clusteredRDD, clusterMap, pcaFeatures, null);
             
             long endTime = System.currentTimeMillis();
             System.out.println("\n========================================");
@@ -177,15 +177,90 @@ public class PropertySimilarityService {
     }
     
     /**
+     * 计算指定ID范围内的房源相似度（只计算property_id < maxPropertyId的房源）
+     * @param maxPropertyId 最大property_id，只计算property_id < maxPropertyId的房源
+     */
+    @Transactional
+    public void calculatePropertySimilarityByRange(int maxPropertyId) {
+        System.out.println("========================================");
+        System.out.println("开始执行房源相似度计算流程（property_id < " + maxPropertyId + "）...");
+        System.out.println("时间: " + new Timestamp(System.currentTimeMillis()));
+        System.out.println("========================================");
+        
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            // 1. 获取并提取房源特征（只加载property_id < maxPropertyId的房源）
+            System.out.println("\n[步骤1/6] 获取房源数据（property_id < " + maxPropertyId + "）...");
+            List<PropertyFeatures> allFeatures = loadPropertyFeatures(maxPropertyId);
+            System.out.println("共获取 " + allFeatures.size() + " 条房源数据（property_id < " + maxPropertyId + "）");
+            
+            if (allFeatures.isEmpty()) {
+                System.out.println("警告：没有找到property_id < " + maxPropertyId + "的有效房源数据！");
+                return;
+            }
+            
+            // 2. 使用Spark RDD进行特征标准化
+            System.out.println("\n[步骤2/6] 使用Spark RDD进行特征标准化...");
+            JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
+            JavaRDD<PropertyFeatures> featuresRDD = jsc.parallelize(allFeatures);
+            List<PropertyFeatures> normalizedFeatures = normalizeFeaturesWithRDD(featuresRDD, allFeatures);
+            
+            // 3. 使用Spark RDD进行PCA降维
+            System.out.println("\n[步骤3/6] 使用Spark RDD进行PCA降维...");
+            JavaRDD<PropertyFeatures> pcaFeaturesRDD = jsc.parallelize(normalizedFeatures);
+            List<PropertyFeatures> pcaFeatures = applyPCAWithRDD(pcaFeaturesRDD, normalizedFeatures);
+            
+            // 4. 使用Spark RDD进行K-Means聚类
+            System.out.println("\n[步骤4/6] 使用Spark RDD进行K-Means聚类...");
+            JavaRDD<PropertyFeatures> clusteredRDD = jsc.parallelize(pcaFeatures);
+            Map<Integer, Integer> clusterMap = performKMeansClusteringWithRDD(clusteredRDD, pcaFeatures);
+            
+            // 5. 保存聚类结果
+            System.out.println("\n[步骤5/6] 保存聚类结果...");
+            saveClusterResultsFromMap(clusterMap);
+            
+            // 6. 计算并保存相似度（只计算同簇内的，只保存property_id < maxPropertyId的相似度）
+            System.out.println("\n[步骤6/6] 使用Spark RDD计算同簇内房源相似度（property_id < " + maxPropertyId + "）...");
+            calculateAndSaveSimilaritiesWithRDD(clusteredRDD, clusterMap, pcaFeatures, maxPropertyId);
+            
+            long endTime = System.currentTimeMillis();
+            System.out.println("\n========================================");
+            System.out.println("房源相似度计算完成（property_id < " + maxPropertyId + "）！");
+            System.out.println("总耗时: " + (endTime - startTime) / 1000.0 + " 秒");
+            System.out.println("========================================");
+            
+        } catch (Exception e) {
+            System.err.println("计算过程中发生错误: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("房源相似度计算失败", e);
+        }
+    }
+    
+    /**
      * 从数据库加载房源特征数据
      */
     private List<PropertyFeatures> loadPropertyFeatures() {
+        return loadPropertyFeatures(null);
+    }
+    
+    /**
+     * 从数据库加载房源特征数据（可指定最大property_id）
+     * @param maxPropertyId 最大property_id，只加载property_id < maxPropertyId的房源，null表示不限制
+     */
+    private List<PropertyFeatures> loadPropertyFeatures(Integer maxPropertyId) {
         String sql = "SELECT p.property_id, p.community_id, p.title, " +
                     "p.basic_info, p.price_info, p.layout_info, " +
                     "c.location_info, c.facility_info, c.name as community_name " +
                     "FROM properties p " +
                     "JOIN communities c ON p.community_id = c.community_id " +
                     "WHERE p.status = 'for_sale'";
+        
+        if (maxPropertyId != null && maxPropertyId > 0) {
+            sql += " AND p.property_id < " + maxPropertyId;
+        }
+        
+        sql += " ORDER BY p.property_id";
         
         List<Map<String, Object>> properties = jdbcTemplate.queryForList(sql);
         List<PropertyFeatures> featuresList = new ArrayList<>();
@@ -631,11 +706,13 @@ public class PropertySimilarityService {
     
     /**
      * 使用Spark RDD计算同簇内房源相似度（避免cartesian操作，使用纯Java循环+Spark分布式计算）
+     * @param maxPropertyId 最大property_id，只保存property_id < maxPropertyId的相似度，null表示不限制
      */
     private void calculateAndSaveSimilaritiesWithRDD(
             JavaRDD<PropertyFeatures> featuresRDD, 
             Map<Integer, Integer> clusterMap,
-            List<PropertyFeatures> featuresList) {
+            List<PropertyFeatures> featuresList,
+            Integer maxPropertyId) {
         
         System.out.println("\n[Spark RDD计算] 开始使用Spark RDD计算同簇内房源相似度...");
         
@@ -648,8 +725,15 @@ public class PropertySimilarityService {
             }
         }
         
-        // 清空现有数据
-        jdbcTemplate.update("DELETE FROM property_similarity");
+        // 清空现有数据（如果指定了maxPropertyId，只删除范围内的数据）
+        if (maxPropertyId != null && maxPropertyId > 0) {
+            String deleteSql = "DELETE FROM property_similarity WHERE property_id1 < ? AND property_id2 < ?";
+            int deleted = jdbcTemplate.update(deleteSql, maxPropertyId, maxPropertyId);
+            System.out.println("  已删除 " + deleted + " 条property_id < " + maxPropertyId + "的相似度记录");
+        } else {
+            jdbcTemplate.update("DELETE FROM property_similarity");
+            System.out.println("  已清空所有相似度记录");
+        }
         
         String insertSql = "INSERT INTO property_similarity " +
                           "(property_id1, property_id2, similarity_data, created_at, updated_at) " +
@@ -657,6 +741,7 @@ public class PropertySimilarityService {
         
         List<Object[]> batchArgs = new ArrayList<>();
         int totalSavedPairs = 0;
+        int filteredPairs = 0;
         
         // 使用Spark RDD进行分布式计算，但避免cartesian操作
         JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
@@ -679,6 +764,14 @@ public class PropertySimilarityService {
                     PropertyFeatures f1 = clusterFeatures.get(i);
                     PropertyFeatures f2 = clusterFeatures.get(j);
                     
+                    // 如果指定了maxPropertyId，只保存范围内的相似度
+                    if (maxPropertyId != null && maxPropertyId > 0) {
+                        if (f1.propertyId >= maxPropertyId || f2.propertyId >= maxPropertyId) {
+                            filteredPairs++;
+                            continue;
+                        }
+                    }
+                    
                     double[] vec1 = extractFeatureArray(f1);
                     double[] vec2 = extractFeatureArray(f2);
                     
@@ -698,6 +791,9 @@ public class PropertySimilarityService {
                         data.put("same_cluster", true);
                         data.put("cluster_id", clusterId);
                         data.put("algorithm", "spark_rdd_cluster_only");
+                        if (maxPropertyId != null && maxPropertyId > 0) {
+                            data.put("max_property_id", maxPropertyId);
+                        }
                         
                         batchArgs.add(new Object[]{f1.propertyId, f2.propertyId, data.toJSONString()});
                         totalSavedPairs++;
@@ -717,6 +813,9 @@ public class PropertySimilarityService {
         }
         
         System.out.println("\n[Spark RDD计算] 相似度计算完成，共保存了 " + totalSavedPairs + " 对同簇房源相似度数据");
+        if (maxPropertyId != null && maxPropertyId > 0) {
+            System.out.println("  过滤了 " + filteredPairs + " 对property_id >= " + maxPropertyId + "的相似度记录");
+        }
     }
     
     /**
