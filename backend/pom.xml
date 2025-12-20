@@ -21,7 +21,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <hadoop.version>3.4.1</hadoop.version>
-        <spark.version>3.3.4</spark.version>
+        <spark.version>3.2.4</spark.version>
         <mysql.version>8.0.33</mysql.version>
     </properties>
 
@@ -71,6 +71,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-log4j2</artifactId>
+        </dependency>
+        
+        <!-- Log4j 1.x API 桥接（Spark 需要，但使用 Log4j2 实现） -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-1.2-api</artifactId>
+            <version>2.20.0</version>
         </dependency>
 
         <!-- MySQL Driver 8 -->
@@ -341,6 +348,20 @@
             <artifactId>fastjson</artifactId>
             <version>1.2.83</version>
         </dependency>
+
+        <!-- Janino - Spark代码生成所需 -->
+        <dependency>
+            <groupId>org.codehaus.janino</groupId>
+            <artifactId>janino</artifactId>
+            <version>3.1.9</version>
+        </dependency>
+        
+        <!-- Commons Compiler - Janino的依赖 -->
+        <dependency>
+            <groupId>org.codehaus.janino</groupId>
+            <artifactId>commons-compiler</artifactId>
+            <version>3.1.9</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -355,7 +376,27 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <!-- 确保所有依赖都被包含 -->
+                    <includeSystemScope>true</includeSystemScope>
+                    <!-- 将janino标记为需要解压的依赖（解决嵌套JAR类加载问题） -->
+                    <requiresUnpack>
+                        <dependency>
+                            <groupId>org.codehaus.janino</groupId>
+                            <artifactId>janino</artifactId>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.codehaus.janino</groupId>
+                            <artifactId>commons-compiler</artifactId>
+                        </dependency>
+                    </requiresUnpack>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

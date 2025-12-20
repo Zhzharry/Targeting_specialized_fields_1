@@ -78,6 +78,9 @@ public class SparkConfig {
         // ========== Spark配置 ==========
         SparkConf conf = new SparkConf()
             .setAppName(appName)
+            // 禁用代码生成以避免janino依赖问题（性能会略降，但可以运行）
+            .set("spark.sql.codegen.wholeStage", "false")
+            .set("spark.sql.codegen.maxFields", "100")
             .setMaster(master)
             
             // ---------- 内存配置 ----------
@@ -98,6 +101,10 @@ public class SparkConfig {
             // ---------- 网络配置（本地模式）----------
             .set("spark.driver.bindAddress", "0.0.0.0")
             .set("spark.ui.enabled", "false")
+            // 本地模式优化：避免网络 shuffle
+            .set("spark.local.dir", tempDir + "/spark-local")
+            .set("spark.network.timeout", "600s")
+            .set("spark.executor.heartbeatInterval", "60s")
             
             // ---------- 文件系统配置（本地模式）----------
             .set("spark.hadoop.fs.defaultFS", "file:///")
