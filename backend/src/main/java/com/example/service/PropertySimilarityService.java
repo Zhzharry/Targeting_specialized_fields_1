@@ -115,59 +115,96 @@ public class PropertySimilarityService {
     @Transactional
     public void calculatePropertySimilarityFull() {
         System.out.println("========================================");
-        System.out.println("开始执行完整的房源相似度计算流程（使用Spark RDD）...");
+        System.out.println("开始执行完整的房源相似度计算流程（按地区分组处理）...");
         System.out.println("时间: " + new Timestamp(System.currentTimeMillis()));
         System.out.println("========================================");
         
         long startTime = System.currentTimeMillis();
         
         try {
-            // 1. 获取并提取房源特征（限制数据量，避免网络问题）
-            System.out.println("\n[步骤1/6] 获取房源数据（限制为前100条，避免网络问题）...");
-            List<PropertyFeatures> allFeatures = loadPropertyFeatures();
-            System.out.println("共获取 " + allFeatures.size() + " 条房源数据");
+            // 1. 获取所有地区列表
+            System.out.println("\n[步骤1] 获取所有地区列表...");
+            List<String> districts = getAllDistricts();
+            System.out.println("共找到 " + districts.size() + " 个地区: " + districts);
             
-            // 限制数据量，只计算前100条（避免任务过大和网络问题）
-            int maxSize = 100;
-            List<PropertyFeatures> featuresList = allFeatures.size() > maxSize 
-                ? allFeatures.subList(0, maxSize) 
-                : allFeatures;
-            System.out.println("实际计算 " + featuresList.size() + " 条房源数据（限制为前" + maxSize + "条）");
-            
-            if (featuresList.isEmpty()) {
-                System.out.println("警告：没有找到有效的房源数据！");
+            if (districts.isEmpty()) {
+                System.out.println("警告：没有找到任何地区数据！");
                 return;
             }
             
-            // 2. 使用Spark RDD进行特征标准化（纯Java实现，避免collect操作）
-            System.out.println("\n[步骤2/6] 使用Spark RDD进行特征标准化...");
-            JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
-            JavaRDD<PropertyFeatures> featuresRDD = jsc.parallelize(featuresList);
-            List<PropertyFeatures> normalizedFeatures = normalizeFeaturesWithRDD(featuresRDD, featuresList);
+            int totalProcessed = 0;
+            int totalSimilarities = 0;
+            int failedDistricts = 0;
             
-            // 3. 使用Spark RDD进行PCA降维（纯Java实现）
-            System.out.println("\n[步骤3/6] 使用Spark RDD进行PCA降维...");
-            JavaRDD<PropertyFeatures> pcaFeaturesRDD = jsc.parallelize(normalizedFeatures);
-            List<PropertyFeatures> pcaFeatures = applyPCAWithRDD(pcaFeaturesRDD, normalizedFeatures);
-            
-            // 4. 使用Spark RDD进行K-Means聚类（纯Java实现）
-            System.out.println("\n[步骤4/6] 使用Spark RDD进行K-Means聚类...");
-            JavaRDD<PropertyFeatures> clusteredRDD = jsc.parallelize(pcaFeatures);
-            Map<Integer, Integer> clusterMap = performKMeansClusteringWithRDD(clusteredRDD, pcaFeatures);
-            
-            // 5. 保存聚类结果
-            System.out.println("\n[步骤5/6] 保存聚类结果...");
-            saveClusterResultsFromMap(clusterMap);
-            
-            // 6. 计算并保存相似度（只计算同簇内的，使用纯Java循环）
-            System.out.println("\n[步骤6/6] 使用Spark RDD计算同簇内房源相似度...");
-            calculateAndSaveSimilaritiesWithRDD(clusteredRDD, clusterMap, pcaFeatures, null);
+            // 2. 按地区顺序处理
+            for (String district : districts) {
+                try {
+                    System.out.println("\n" + "=".repeat(60));
+                    System.out.println("处理地区: " + district);
+                    System.out.println("=".repeat(60));
+                    
+                    long districtStartTime = System.currentTimeMillis();
+                    
+                    // 2.1 加载该地区的房源
+                    List<PropertyFeatures> districtFeatures = loadPropertyFeaturesByDistrict(district);
+                    System.out.println("  地区 " + district + " 共有 " + districtFeatures.size() + " 个房源");
+                    
+                    if (districtFeatures.size() < 2) {
+                        System.out.println("  跳过地区 " + district + "（房源数量不足）");
+                        continue;
+                    }
+                    
+                    // 2.2 特征标准化
+                    System.out.println("  [2.2] 特征标准化...");
+                    JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
+                    JavaRDD<PropertyFeatures> featuresRDD = jsc.parallelize(districtFeatures);
+                    List<PropertyFeatures> normalizedFeatures = normalizeFeaturesWithRDD(featuresRDD, districtFeatures);
+                    
+                    // 2.3 PCA降维（简化版，保留所有特征）
+                    System.out.println("  [2.3] PCA降维...");
+                    JavaRDD<PropertyFeatures> pcaFeaturesRDD = jsc.parallelize(normalizedFeatures);
+                    List<PropertyFeatures> pcaFeatures = applyPCAWithRDD(pcaFeaturesRDD, normalizedFeatures);
+                    
+                    // 2.4 K-Means聚类（只对该地区的房源）
+                    System.out.println("  [2.4] K-Means聚类...");
+                    JavaRDD<PropertyFeatures> clusteredRDD = jsc.parallelize(pcaFeatures);
+                    Map<Integer, Integer> clusterMap = performKMeansClusteringWithRDD(clusteredRDD, pcaFeatures);
+                    
+                    // 2.5 保存聚类结果（添加地区信息）
+                    System.out.println("  [2.5] 保存聚类结果...");
+                    saveClusterResultsFromMap(clusterMap, district);
+                    
+                    // 2.6 计算并保存相似度（只计算同区内的）
+                    System.out.println("  [2.6] 计算同区内房源相似度...");
+                    int similarityCount = calculateAndSaveSimilaritiesWithRDD(
+                        clusteredRDD, clusterMap, pcaFeatures, null, district);
+                    
+                    totalProcessed += districtFeatures.size();
+                    totalSimilarities += similarityCount;
+                    
+                    long districtEndTime = System.currentTimeMillis();
+                    System.out.println("  ✓ 地区 " + district + " 处理完成，耗时: " + 
+                        (districtEndTime - districtStartTime) / 1000.0 + " 秒，保存了 " + 
+                        similarityCount + " 条相似度记录");
+                    
+                } catch (Exception e) {
+                    failedDistricts++;
+                    System.err.println("  ✗ 处理地区 " + district + " 时出错: " + e.getMessage());
+                    e.printStackTrace();
+                    // 继续处理下一个地区
+                }
+            }
             
             long endTime = System.currentTimeMillis();
-            System.out.println("\n========================================");
+            System.out.println("\n" + "=".repeat(60));
             System.out.println("房源相似度计算完成！");
             System.out.println("总耗时: " + (endTime - startTime) / 1000.0 + " 秒");
-            System.out.println("========================================");
+            System.out.println("处理地区数: " + districts.size());
+            System.out.println("成功处理: " + (districts.size() - failedDistricts) + " 个地区");
+            System.out.println("失败地区: " + failedDistricts + " 个");
+            System.out.println("处理房源总数: " + totalProcessed);
+            System.out.println("保存相似度记录总数: " + totalSimilarities);
+            System.out.println("=".repeat(60));
             
         } catch (Exception e) {
             System.err.println("计算过程中发生错误: " + e.getMessage());
@@ -177,64 +214,193 @@ public class PropertySimilarityService {
     }
     
     /**
-     * 计算指定ID范围内的房源相似度（只计算property_id < maxPropertyId的房源）
+     * 计算指定ID范围内的房源相似度（只计算property_id < maxPropertyId的房源，按地区分组处理）
      * @param maxPropertyId 最大property_id，只计算property_id < maxPropertyId的房源
      */
     @Transactional
     public void calculatePropertySimilarityByRange(int maxPropertyId) {
         System.out.println("========================================");
-        System.out.println("开始执行房源相似度计算流程（property_id < " + maxPropertyId + "）...");
+        System.out.println("开始执行房源相似度计算流程（property_id < " + maxPropertyId + "，按地区分组）...");
         System.out.println("时间: " + new Timestamp(System.currentTimeMillis()));
         System.out.println("========================================");
         
         long startTime = System.currentTimeMillis();
         
         try {
-            // 1. 获取并提取房源特征（只加载property_id < maxPropertyId的房源）
-            System.out.println("\n[步骤1/6] 获取房源数据（property_id < " + maxPropertyId + "）...");
-            List<PropertyFeatures> allFeatures = loadPropertyFeatures(maxPropertyId);
-            System.out.println("共获取 " + allFeatures.size() + " 条房源数据（property_id < " + maxPropertyId + "）");
+            // 1. 获取所有地区列表（只包含property_id < maxPropertyId的房源）
+            System.out.println("\n[步骤1] 获取所有地区列表（property_id < " + maxPropertyId + "）...");
+            List<String> districts = getAllDistricts(maxPropertyId);
+            System.out.println("共找到 " + districts.size() + " 个地区: " + districts);
             
-            if (allFeatures.isEmpty()) {
-                System.out.println("警告：没有找到property_id < " + maxPropertyId + "的有效房源数据！");
+            if (districts.isEmpty()) {
+                System.out.println("警告：没有找到property_id < " + maxPropertyId + "的任何地区数据！");
                 return;
             }
             
-            // 2. 使用Spark RDD进行特征标准化
-            System.out.println("\n[步骤2/6] 使用Spark RDD进行特征标准化...");
-            JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
-            JavaRDD<PropertyFeatures> featuresRDD = jsc.parallelize(allFeatures);
-            List<PropertyFeatures> normalizedFeatures = normalizeFeaturesWithRDD(featuresRDD, allFeatures);
+            int totalProcessed = 0;
+            int totalSimilarities = 0;
+            int failedDistricts = 0;
             
-            // 3. 使用Spark RDD进行PCA降维
-            System.out.println("\n[步骤3/6] 使用Spark RDD进行PCA降维...");
-            JavaRDD<PropertyFeatures> pcaFeaturesRDD = jsc.parallelize(normalizedFeatures);
-            List<PropertyFeatures> pcaFeatures = applyPCAWithRDD(pcaFeaturesRDD, normalizedFeatures);
-            
-            // 4. 使用Spark RDD进行K-Means聚类
-            System.out.println("\n[步骤4/6] 使用Spark RDD进行K-Means聚类...");
-            JavaRDD<PropertyFeatures> clusteredRDD = jsc.parallelize(pcaFeatures);
-            Map<Integer, Integer> clusterMap = performKMeansClusteringWithRDD(clusteredRDD, pcaFeatures);
-            
-            // 5. 保存聚类结果
-            System.out.println("\n[步骤5/6] 保存聚类结果...");
-            saveClusterResultsFromMap(clusterMap);
-            
-            // 6. 计算并保存相似度（只计算同簇内的，只保存property_id < maxPropertyId的相似度）
-            System.out.println("\n[步骤6/6] 使用Spark RDD计算同簇内房源相似度（property_id < " + maxPropertyId + "）...");
-            calculateAndSaveSimilaritiesWithRDD(clusteredRDD, clusterMap, pcaFeatures, maxPropertyId);
+            // 2. 按地区顺序处理
+            for (String district : districts) {
+                try {
+                    System.out.println("\n" + "=".repeat(60));
+                    System.out.println("处理地区: " + district + " (property_id < " + maxPropertyId + ")");
+                    System.out.println("=".repeat(60));
+                    
+                    long districtStartTime = System.currentTimeMillis();
+                    
+                    // 2.1 加载该地区的房源（property_id < maxPropertyId）
+                    List<PropertyFeatures> districtFeatures = loadPropertyFeaturesByDistrict(district, maxPropertyId);
+                    System.out.println("  地区 " + district + " 共有 " + districtFeatures.size() + " 个房源（property_id < " + maxPropertyId + "）");
+                    
+                    if (districtFeatures.size() < 2) {
+                        System.out.println("  跳过地区 " + district + "（房源数量不足）");
+                        continue;
+                    }
+                    
+                    // 2.2 特征标准化
+                    System.out.println("  [2.2] 特征标准化...");
+                    JavaSparkContext jsc = JavaSparkContext.fromSparkContext(sparkSession.sparkContext());
+                    JavaRDD<PropertyFeatures> featuresRDD = jsc.parallelize(districtFeatures);
+                    List<PropertyFeatures> normalizedFeatures = normalizeFeaturesWithRDD(featuresRDD, districtFeatures);
+                    
+                    // 2.3 PCA降维
+                    System.out.println("  [2.3] PCA降维...");
+                    JavaRDD<PropertyFeatures> pcaFeaturesRDD = jsc.parallelize(normalizedFeatures);
+                    List<PropertyFeatures> pcaFeatures = applyPCAWithRDD(pcaFeaturesRDD, normalizedFeatures);
+                    
+                    // 2.4 K-Means聚类
+                    System.out.println("  [2.4] K-Means聚类...");
+                    JavaRDD<PropertyFeatures> clusteredRDD = jsc.parallelize(pcaFeatures);
+                    Map<Integer, Integer> clusterMap = performKMeansClusteringWithRDD(clusteredRDD, pcaFeatures);
+                    
+                    // 2.5 保存聚类结果
+                    System.out.println("  [2.5] 保存聚类结果...");
+                    saveClusterResultsFromMap(clusterMap, district);
+                    
+                    // 2.6 计算并保存相似度
+                    System.out.println("  [2.6] 计算同区内房源相似度...");
+                    int similarityCount = calculateAndSaveSimilaritiesWithRDD(
+                        clusteredRDD, clusterMap, pcaFeatures, maxPropertyId, district);
+                    
+                    totalProcessed += districtFeatures.size();
+                    totalSimilarities += similarityCount;
+                    
+                    long districtEndTime = System.currentTimeMillis();
+                    System.out.println("  ✓ 地区 " + district + " 处理完成，耗时: " + 
+                        (districtEndTime - districtStartTime) / 1000.0 + " 秒，保存了 " + 
+                        similarityCount + " 条相似度记录");
+                    
+                } catch (Exception e) {
+                    failedDistricts++;
+                    System.err.println("  ✗ 处理地区 " + district + " 时出错: " + e.getMessage());
+                    e.printStackTrace();
+                    // 继续处理下一个地区
+                }
+            }
             
             long endTime = System.currentTimeMillis();
-            System.out.println("\n========================================");
+            System.out.println("\n" + "=".repeat(60));
             System.out.println("房源相似度计算完成（property_id < " + maxPropertyId + "）！");
             System.out.println("总耗时: " + (endTime - startTime) / 1000.0 + " 秒");
-            System.out.println("========================================");
+            System.out.println("处理地区数: " + districts.size());
+            System.out.println("成功处理: " + (districts.size() - failedDistricts) + " 个地区");
+            System.out.println("失败地区: " + failedDistricts + " 个");
+            System.out.println("处理房源总数: " + totalProcessed);
+            System.out.println("保存相似度记录总数: " + totalSimilarities);
+            System.out.println("=".repeat(60));
             
         } catch (Exception e) {
             System.err.println("计算过程中发生错误: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("房源相似度计算失败", e);
         }
+    }
+    
+    /**
+     * 获取所有地区列表
+     */
+    private List<String> getAllDistricts() {
+        return getAllDistricts(null);
+    }
+    
+    /**
+     * 获取所有地区列表（可指定最大property_id）
+     * @param maxPropertyId 最大property_id，只查询property_id < maxPropertyId的房源所在地区，null表示不限制
+     */
+    private List<String> getAllDistricts(Integer maxPropertyId) {
+        String sql = "SELECT DISTINCT JSON_EXTRACT(c.location_info, '$.district') as district " +
+                    "FROM properties p " +
+                    "JOIN communities c ON p.community_id = c.community_id " +
+                    "WHERE p.status = 'for_sale' " +
+                    "  AND JSON_EXTRACT(c.location_info, '$.district') IS NOT NULL " +
+                    "  AND JSON_EXTRACT(c.location_info, '$.district') != 'null'";
+        
+        if (maxPropertyId != null && maxPropertyId > 0) {
+            sql += " AND p.property_id < " + maxPropertyId;
+        }
+        
+        sql += " ORDER BY district";
+        
+        List<String> districts = new ArrayList<>();
+        List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
+        
+        for (Map<String, Object> row : results) {
+            Object districtObj = row.get("district");
+            if (districtObj != null) {
+                String district = districtObj.toString().replace("\"", "").trim();
+                if (!district.isEmpty() && !"null".equals(district)) {
+                    districts.add(district);
+                }
+            }
+        }
+        
+        return districts;
+    }
+    
+    /**
+     * 按地区加载房源特征数据
+     * @param district 地区名称
+     */
+    private List<PropertyFeatures> loadPropertyFeaturesByDistrict(String district) {
+        return loadPropertyFeaturesByDistrict(district, null);
+    }
+    
+    /**
+     * 按地区加载房源特征数据（可指定最大property_id）
+     * @param district 地区名称
+     * @param maxPropertyId 最大property_id，只加载property_id < maxPropertyId的房源，null表示不限制
+     */
+    private List<PropertyFeatures> loadPropertyFeaturesByDistrict(String district, Integer maxPropertyId) {
+        String sql = "SELECT p.property_id, p.community_id, p.title, " +
+                    "p.basic_info, p.price_info, p.layout_info, " +
+                    "c.location_info, c.facility_info, c.name as community_name " +
+                    "FROM properties p " +
+                    "JOIN communities c ON p.community_id = c.community_id " +
+                    "WHERE p.status = 'for_sale' " +
+                    "  AND JSON_EXTRACT(c.location_info, '$.district') = ?";
+        
+        if (maxPropertyId != null && maxPropertyId > 0) {
+            sql += " AND p.property_id < " + maxPropertyId;
+        }
+        
+        sql += " ORDER BY p.property_id";
+        
+        List<Map<String, Object>> properties = jdbcTemplate.queryForList(sql, "\"" + district + "\"");
+        List<PropertyFeatures> featuresList = new ArrayList<>();
+        
+        for (Map<String, Object> prop : properties) {
+            try {
+                PropertyFeatures features = extractFeatures(prop);
+                if (features != null && features.isValid()) {
+                    featuresList.add(features);
+                }
+            } catch (Exception e) {
+                System.err.println("提取房源 " + prop.get("property_id") + " 特征时出错: " + e.getMessage());
+            }
+        }
+        return featuresList;
     }
     
     /**
@@ -699,20 +865,32 @@ public class PropertySimilarityService {
      * 保存聚类结果（从Map）
      */
     private void saveClusterResultsFromMap(Map<Integer, Integer> clusterMap) {
-        propertyClusterCache.clear();
+        saveClusterResultsFromMap(clusterMap, null);
+    }
+    
+    /**
+     * 保存聚类结果（从Map，可指定地区）
+     * @param clusterMap 聚类映射
+     * @param district 地区名称，null表示不指定
+     */
+    private void saveClusterResultsFromMap(Map<Integer, Integer> clusterMap, String district) {
         propertyClusterCache.putAll(clusterMap);
-        System.out.println("聚类结果已缓存，共 " + clusterMap.size() + " 个房源");
+        String districtInfo = district != null ? "（地区: " + district + "）" : "";
+        System.out.println("聚类结果已缓存，共 " + clusterMap.size() + " 个房源" + districtInfo);
     }
     
     /**
      * 使用Spark RDD计算同簇内房源相似度（避免cartesian操作，使用纯Java循环+Spark分布式计算）
      * @param maxPropertyId 最大property_id，只保存property_id < maxPropertyId的相似度，null表示不限制
+     * @param district 地区名称，用于标记相似度记录，null表示不指定
+     * @return 保存的相似度记录数量
      */
-    private void calculateAndSaveSimilaritiesWithRDD(
+    private int calculateAndSaveSimilaritiesWithRDD(
             JavaRDD<PropertyFeatures> featuresRDD, 
             Map<Integer, Integer> clusterMap,
             List<PropertyFeatures> featuresList,
-            Integer maxPropertyId) {
+            Integer maxPropertyId,
+            String district) {
         
         System.out.println("\n[Spark RDD计算] 开始使用Spark RDD计算同簇内房源相似度...");
         
@@ -725,14 +903,31 @@ public class PropertySimilarityService {
             }
         }
         
-        // 清空现有数据（如果指定了maxPropertyId，只删除范围内的数据）
-        if (maxPropertyId != null && maxPropertyId > 0) {
+        // 清空现有数据（如果指定了地区，只删除该地区的相似度记录）
+        if (district != null && !district.isEmpty()) {
+            // 获取该地区的所有房源ID
+            List<Integer> districtPropertyIds = new ArrayList<>();
+            for (PropertyFeatures f : featuresList) {
+                districtPropertyIds.add(f.propertyId);
+            }
+            
+            if (!districtPropertyIds.isEmpty()) {
+                String placeholders = String.join(",", Collections.nCopies(districtPropertyIds.size(), "?"));
+                String deleteSql = "DELETE FROM property_similarity " +
+                                 "WHERE property_id1 IN (" + placeholders + ") " +
+                                 "   OR property_id2 IN (" + placeholders + ")";
+                List<Object> params = new ArrayList<>(districtPropertyIds);
+                params.addAll(districtPropertyIds);
+                int deleted = jdbcTemplate.update(deleteSql, params.toArray());
+                System.out.println("  已删除地区 " + district + " 的 " + deleted + " 条相似度记录");
+            }
+        } else if (maxPropertyId != null && maxPropertyId > 0) {
             String deleteSql = "DELETE FROM property_similarity WHERE property_id1 < ? AND property_id2 < ?";
             int deleted = jdbcTemplate.update(deleteSql, maxPropertyId, maxPropertyId);
             System.out.println("  已删除 " + deleted + " 条property_id < " + maxPropertyId + "的相似度记录");
         } else {
-            jdbcTemplate.update("DELETE FROM property_similarity");
-            System.out.println("  已清空所有相似度记录");
+            // 不清空，只添加新记录（避免影响其他地区的数据）
+            System.out.println("  不清空现有数据，直接添加新记录");
         }
         
         String insertSql = "INSERT INTO property_similarity " +
@@ -791,6 +986,9 @@ public class PropertySimilarityService {
                         data.put("same_cluster", true);
                         data.put("cluster_id", clusterId);
                         data.put("algorithm", "spark_rdd_cluster_only");
+                        if (district != null && !district.isEmpty()) {
+                            data.put("district", district);
+                        }
                         if (maxPropertyId != null && maxPropertyId > 0) {
                             data.put("max_property_id", maxPropertyId);
                         }
@@ -816,6 +1014,11 @@ public class PropertySimilarityService {
         if (maxPropertyId != null && maxPropertyId > 0) {
             System.out.println("  过滤了 " + filteredPairs + " 对property_id >= " + maxPropertyId + "的相似度记录");
         }
+        if (district != null && !district.isEmpty()) {
+            System.out.println("  地区: " + district);
+        }
+        
+        return totalSavedPairs;
     }
     
     /**
