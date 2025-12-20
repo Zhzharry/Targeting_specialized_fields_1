@@ -34,3 +34,4 @@ build/
 .vscode/
 # 在项目根目录的 .gitignore 文件中添加：
 *.pkl
+*.onnx

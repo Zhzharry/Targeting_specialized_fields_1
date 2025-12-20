@@ -111,17 +111,245 @@ public class HomeController {
     public ResponseEntity<Map<String, Object>> guessYouLike(
             @RequestParam(value = "userId", required = false) Long userId) {
         try {
-            // 从数据库获取热门房源（浏览次数最多）
-            List<Map<String, Object>> properties = getPopularProperties(10);
+            List<Map<String, Object>> recommendedProperties = new ArrayList<>();
+            Set<Long> propertyIds = new HashSet<>(); // 用于去重
+            
+            if (userId != null) {
+                // 1. 获取相似度最高的3个用户的全部收藏房源
+                List<Map<String, Object>> similarUsersFavorites = getSimilarUsersFavorites(userId, 3);
+                for (Map<String, Object> favorite : similarUsersFavorites) {
+                    Long propertyId = ((Number) favorite.get("propertyId")).longValue();
+                    if (!propertyIds.contains(propertyId)) {
+                        propertyIds.add(propertyId);
+                        recommendedProperties.add(favorite);
+                    }
+                }
+                
+                // 2. 获取用户自己收藏的房源
+                List<Long> userFavoritePropertyIds = getUserFavoritePropertyIds(userId);
+                
+                // 3. 获取与用户收藏房源相似度最高的前5个房源（每个收藏房源取前5个相似房源）
+                for (Long favoritePropertyId : userFavoritePropertyIds) {
+                    List<Map<String, Object>> similarProperties = getSimilarPropertiesForRecommendation(favoritePropertyId, 5);
+                    for (Map<String, Object> similar : similarProperties) {
+                        Long propertyId = ((Number) similar.get("propertyId")).longValue();
+                        // 排除用户已收藏的房源
+                        if (!userFavoritePropertyIds.contains(propertyId) && !propertyIds.contains(propertyId)) {
+                            propertyIds.add(propertyId);
+                            recommendedProperties.add(similar);
+                        }
+                    }
+                }
+            }
+            
+            // 如果推荐结果不足或没有userId，补充热门房源
+            if (recommendedProperties.size() < 10) {
+                List<Map<String, Object>> popularProperties = getPopularProperties(10);
+                for (Map<String, Object> popular : popularProperties) {
+                    Long propertyId = ((Number) popular.get("propertyId")).longValue();
+                    if (!propertyIds.contains(propertyId)) {
+                        propertyIds.add(propertyId);
+                        recommendedProperties.add(popular);
+                        if (recommendedProperties.size() >= 10) {
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // 限制返回数量
+            if (recommendedProperties.size() > 10) {
+                recommendedProperties = recommendedProperties.subList(0, 10);
+            }
 
             Map<String, Object> body = new HashMap<String, Object>();
-            body.put("items", properties);
-            body.put("message", "猜你喜欢数据获取成功");
+            body.put("items", recommendedProperties);
+            body.put("message", "Guess you like data retrieved successfully");
+            body.put("count", recommendedProperties.size());
             return ResponseEntity.ok(body);
         } catch (Exception e) {
-            // 失败时返回示例数据
-            return ResponseEntity.ok(buildRecommendationResponse("猜你喜欢数据（示例）"));
+            e.printStackTrace();
+            // 失败时返回热门房源
+            try {
+                List<Map<String, Object>> properties = getPopularProperties(10);
+                Map<String, Object> body = new HashMap<String, Object>();
+                body.put("items", properties);
+                body.put("message", "Guess you like data (fallback to popular properties)");
+                return ResponseEntity.ok(body);
+            } catch (Exception ex) {
+                return ResponseEntity.ok(buildRecommendationResponse("Guess you like data (example)"));
+            }
         }
+    }
+    
+    /**
+     * 获取相似度最高的N个用户的全部收藏房源
+     */
+    private List<Map<String, Object>> getSimilarUsersFavorites(Long userId, int topN) throws SQLException {
+        List<Map<String, Object>> properties = new ArrayList<>();
+        
+        // 1. 获取相似度最高的N个用户
+        String similarUsersSql = "SELECT " +
+                "CASE WHEN user_id1 = ? THEN user_id2 ELSE user_id1 END as similar_user_id, " +
+                "CAST(JSON_EXTRACT(similarity_data, '$.similarity_score') AS DECIMAL(8,4)) as similarity_score " +
+                "FROM user_similarity " +
+                "WHERE user_id1 = ? OR user_id2 = ? " +
+                "ORDER BY similarity_score DESC " +
+                "LIMIT ?";
+        
+        List<Long> similarUserIds = new ArrayList<>();
+        try (Connection connection = getConnection();
+                PreparedStatement ps = connection.prepareStatement(similarUsersSql)) {
+            ps.setLong(1, userId);
+            ps.setLong(2, userId);
+            ps.setLong(3, userId);
+            ps.setInt(4, topN);
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    similarUserIds.add(rs.getLong("similar_user_id"));
+                }
+            }
+        }
+        
+        if (similarUserIds.isEmpty()) {
+            return properties;
+        }
+        
+        // 2. 获取这些用户的全部收藏房源
+        String placeholders = similarUserIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        String favoritesSql = "SELECT DISTINCT f.property_id, p.title, p.price_info, p.layout_info, " +
+                "c.name as community_name, c.location_info, p.view_count " +
+                "FROM favorites f " +
+                "INNER JOIN properties p ON f.property_id = p.property_id " +
+                "LEFT JOIN communities c ON p.community_id = c.community_id " +
+                "WHERE f.user_id IN (" + placeholders + ") " +
+                "AND p.status = 'for_sale'";
+        
+        try (Connection connection = getConnection();
+                PreparedStatement ps = connection.prepareStatement(favoritesSql)) {
+            for (int i = 0; i < similarUserIds.size(); i++) {
+                ps.setLong(i + 1, similarUserIds.get(i));
+            }
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> property = buildPropertyCard(rs);
+                    properties.add(property);
+                }
+            }
+        }
+        
+        return properties;
+    }
+    
+    /**
+     * 获取用户收藏的房源ID列表
+     */
+    private List<Long> getUserFavoritePropertyIds(Long userId) throws SQLException {
+        List<Long> propertyIds = new ArrayList<>();
+        String sql = "SELECT property_id FROM favorites WHERE user_id = ?";
+        
+        try (Connection connection = getConnection();
+                PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    propertyIds.add(rs.getLong("property_id"));
+                }
+            }
+        }
+        
+        return propertyIds;
+    }
+    
+    /**
+     * 获取与指定房源相似度最高的前N个房源（用于推荐）
+     */
+    private List<Map<String, Object>> getSimilarPropertiesForRecommendation(Long propertyId, int limit) throws SQLException {
+        List<Map<String, Object>> properties = new ArrayList<>();
+        
+        String sql = "SELECT " +
+                "CASE WHEN ps.property_id1 = ? THEN ps.property_id2 ELSE ps.property_id1 END as similar_property_id, " +
+                "CAST(JSON_EXTRACT(ps.similarity_data, '$.similarity_score') AS DECIMAL(8,4)) as similarity_score, " +
+                "p.title, p.price_info, p.layout_info, " +
+                "c.name as community_name, c.location_info, p.view_count " +
+                "FROM property_similarity ps " +
+                "INNER JOIN properties p ON (CASE WHEN ps.property_id1 = ? THEN ps.property_id2 ELSE ps.property_id1 END) = p.property_id " +
+                "LEFT JOIN communities c ON p.community_id = c.community_id " +
+                "WHERE (ps.property_id1 = ? OR ps.property_id2 = ?) " +
+                "AND p.status = 'for_sale' " +
+                "ORDER BY similarity_score DESC " +
+                "LIMIT ?";
+        
+        try (Connection connection = getConnection();
+                PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setLong(1, propertyId);
+            ps.setLong(2, propertyId);
+            ps.setLong(3, propertyId);
+            ps.setLong(4, propertyId);
+            ps.setInt(5, limit);
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> property = buildPropertyCard(rs);
+                    property.put("propertyId", rs.getLong("similar_property_id"));
+                    properties.add(property);
+                }
+            }
+        }
+        
+        return properties;
+    }
+    
+    /**
+     * 构建房源卡片数据（用于推荐列表）
+     */
+    private Map<String, Object> buildPropertyCard(ResultSet rs) throws SQLException {
+        Map<String, Object> property = new HashMap<>();
+        // 尝试获取property_id，如果没有则尝试similar_property_id
+        try {
+            property.put("propertyId", rs.getLong("property_id"));
+        } catch (SQLException e) {
+            try {
+                property.put("propertyId", rs.getLong("similar_property_id"));
+            } catch (SQLException ex) {
+                // 如果都没有，使用默认值
+                property.put("propertyId", 0L);
+            }
+        }
+        property.put("title", rs.getString("title"));
+        
+        // 解析价格信息
+        String priceInfoJson = rs.getString("price_info");
+        Map<String, Object> priceInfo = parseJsonToMap(priceInfoJson);
+        Double totalPrice = priceInfo != null
+                ? ((Number) priceInfo.getOrDefault("total_price", 0)).doubleValue()
+                : 0.0;
+        
+        // 解析户型信息
+        String layoutInfoJson = rs.getString("layout_info");
+        Map<String, Object> layoutInfo = parseJsonToMap(layoutInfoJson);
+        
+        // 构建summary
+        String communityName = rs.getString("community_name");
+        Double area = extractDouble(layoutInfo, "area");
+        Integer bedroomCount = extractInt(layoutInfo, "bedroom_count");
+        Integer livingRoomCount = extractInt(layoutInfo, "living_room_count");
+        
+        String summary = String.format("%s · %.0f㎡ · %d室%d厅",
+                communityName != null ? communityName : "Unknown Community",
+                area != null ? area : 0,
+                bedroomCount != null ? bedroomCount : 0,
+                livingRoomCount != null ? livingRoomCount : 0);
+        property.put("summary", summary);
+        
+        property.put("totalPrice", totalPrice);
+        property.put("cover", "https://picsum.photos/seed/" + property.get("propertyId") + "/300/200");
+        property.put("detailUrl", "https://example.com/property/" + property.get("propertyId"));
+        property.put("tags", Arrays.asList("Recommended", "High Similarity"));
+        
+        return property;
     }
 
     /**
