@@ -73,7 +73,7 @@ public class SparkConfig {
             .set("spark.sql.legacy.timeParserPolicy", "LEGACY")
             
             // ---------- 网络配置（本地模式）----------
-            .set("spark.driver.bindAddress", "127.0.0.1")
+            .set("spark.driver.bindAddress", "0.0.0.0")
             .set("spark.ui.enabled", "false")
             
             // ---------- 文件系统配置（本地模式）----------

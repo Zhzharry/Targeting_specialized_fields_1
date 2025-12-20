@@ -21,7 +21,7 @@ export default defineConfig({
   // 新增的解决 EACCES 错误的配置
   // ===================================
   server: {
-    host: 'localhost', // 强制绑定到 IPv4 本地回环地址
+    host: '0.0.0.0', // 绑定到所有网络接口，允许外部访问（Docker 容器需要）
     port: 5173        // 可选：保持默认端口
   }
 })
