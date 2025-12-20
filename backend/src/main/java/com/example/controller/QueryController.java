@@ -409,11 +409,103 @@ public class QueryController {
         item.put("viewCount", rs.getInt("view_count"));
         item.put("favoriteCount", rs.getInt("favorite_count"));
         item.put("updatedAt", rs.getTimestamp("updated_at"));
-        item.put("priceInfo", parseJson(rs.getString("price_info")));
-        item.put("layoutInfo", parseJson(rs.getString("layout_info")));
-        item.put("basicInfo", parseJson(rs.getString("basic_info")));
-        item.put("locationInfo", parseJson(rs.getString("location_info")));
+        
+        // 解析JSON字段
+        Map<String, Object> priceInfo = parseJsonToMap(rs.getString("price_info"));
+        Map<String, Object> layoutInfo = parseJsonToMap(rs.getString("layout_info"));
+        Map<String, Object> basicInfo = parseJsonToMap(rs.getString("basic_info"));
+        Map<String, Object> locationInfo = parseJsonToMap(rs.getString("location_info"));
+        
+        // 确保layoutInfo包含所有必要字段，处理null值
+        if (layoutInfo != null) {
+            // 确保楼层信息存在
+            if (!layoutInfo.containsKey("floor") || layoutInfo.get("floor") == null) {
+                layoutInfo.put("floor", null);
+            }
+            if (!layoutInfo.containsKey("total_floors") || layoutInfo.get("total_floors") == null) {
+                layoutInfo.put("total_floors", null);
+            }
+            // 确保朝向信息存在
+            if (!layoutInfo.containsKey("orientation") || layoutInfo.get("orientation") == null) {
+                layoutInfo.put("orientation", null);
+            }
+            // 确保其他字段存在
+            if (!layoutInfo.containsKey("bedroom_count") || layoutInfo.get("bedroom_count") == null) {
+                layoutInfo.put("bedroom_count", 0);
+            }
+            if (!layoutInfo.containsKey("living_room_count") || layoutInfo.get("living_room_count") == null) {
+                layoutInfo.put("living_room_count", 0);
+            }
+            if (!layoutInfo.containsKey("bathroom_count") || layoutInfo.get("bathroom_count") == null) {
+                layoutInfo.put("bathroom_count", 0);
+            }
+            if (!layoutInfo.containsKey("area") || layoutInfo.get("area") == null) {
+                layoutInfo.put("area", null);
+            }
+        } else {
+            layoutInfo = new HashMap<String, Object>();
+            layoutInfo.put("floor", null);
+            layoutInfo.put("total_floors", null);
+            layoutInfo.put("orientation", null);
+            layoutInfo.put("bedroom_count", 0);
+            layoutInfo.put("living_room_count", 0);
+            layoutInfo.put("bathroom_count", 0);
+            layoutInfo.put("area", null);
+        }
+        
+        // 确保basicInfo包含所有必要字段
+        if (basicInfo != null) {
+            // 确保装修信息存在
+            if (!basicInfo.containsKey("decoration") || basicInfo.get("decoration") == null) {
+                basicInfo.put("decoration", null);
+            }
+            // 确保建造年份存在
+            if (!basicInfo.containsKey("build_year") || basicInfo.get("build_year") == null) {
+                basicInfo.put("build_year", null);
+            }
+        } else {
+            basicInfo = new HashMap<String, Object>();
+            basicInfo.put("decoration", null);
+            basicInfo.put("build_year", null);
+        }
+        
+        // 确保priceInfo包含所有必要字段
+        if (priceInfo == null) {
+            priceInfo = new HashMap<String, Object>();
+            priceInfo.put("total_price", null);
+            priceInfo.put("unit_price", null);
+        }
+        
+        // 确保locationInfo包含所有必要字段
+        if (locationInfo == null) {
+            locationInfo = new HashMap<String, Object>();
+            locationInfo.put("province", null);
+            locationInfo.put("city", null);
+            locationInfo.put("district", null);
+        }
+        
+        item.put("priceInfo", priceInfo);
+        item.put("layoutInfo", layoutInfo);
+        item.put("basicInfo", basicInfo);
+        item.put("locationInfo", locationInfo);
+        
         return item;
+    }
+    
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonToMap(String json) {
+        if (!hasText(json)) {
+            return null;
+        }
+        try {
+            Object parsed = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+            if (parsed instanceof Map) {
+                return (Map<String, Object>) parsed;
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private boolean hasText(String value) {

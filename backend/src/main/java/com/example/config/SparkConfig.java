@@ -95,7 +95,6 @@ public class SparkConfig {
             // ---------- 时间解析兼容性 ----------
             .set("spark.sql.legacy.timeParserPolicy", "LEGACY")
             
-<<<<<<< HEAD
             // ---------- 网络配置（本地模式）----------
             .set("spark.driver.bindAddress", "0.0.0.0")
             .set("spark.ui.enabled", "false")
@@ -105,8 +104,6 @@ public class SparkConfig {
             .set("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem")
             .set("spark.sql.warehouse.dir", tempDir + "/spark-warehouse")
             
-=======
->>>>>>> 1aa1723621a687a146296ed5fc6f90ecfd1397e9
             // ---------- 其他优化 ----------
             .set("spark.hadoop.validateOutputSpecs", "false")
             .set("spark.sql.adaptive.enabled", "true");
