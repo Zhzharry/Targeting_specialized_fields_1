@@ -1,5 +1,6 @@
 package com.example.controller;
 
+import com.example.service.UserSimilaritySparkService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,6 +39,9 @@ public class QueryController {
 
     private final DataSource dataSource;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    @Autowired(required = false)
+    private UserSimilaritySparkService userSimilaritySparkService;
 
     /**
      * 收藏房源。
@@ -75,7 +80,20 @@ public class QueryController {
                 }
             }
 
-            // 插入收藏记录
+            // 检查是否已经收藏过
+            boolean alreadyFavorited = false;
+            String checkFavoriteSql = "SELECT COUNT(*) FROM favorites WHERE user_id = ? AND property_id = ?";
+            try (PreparedStatement checkFavorite = connection.prepareStatement(checkFavoriteSql)) {
+                checkFavorite.setLong(1, userId);
+                checkFavorite.setLong(2, propertyId);
+                try (ResultSet rs = checkFavorite.executeQuery()) {
+                    if (rs.next() && rs.getInt(1) > 0) {
+                        alreadyFavorited = true;
+                    }
+                }
+            }
+
+            // 插入收藏记录（如果不存在）
             String sql = "INSERT INTO favorites (user_id, property_id, favorite_data) VALUES (?, ?, ?)" +
                     " ON DUPLICATE KEY UPDATE favorite_data = VALUES(favorite_data), created_at = CURRENT_TIMESTAMP";
 
@@ -83,12 +101,61 @@ public class QueryController {
                 ps.setLong(1, userId);
                 ps.setLong(2, propertyId);
                 ps.setString(3, "{}");
-                ps.executeUpdate();
+                int rowsAffected = ps.executeUpdate();
+
+                // 如果成功插入新收藏（不是更新），则增加收藏次数
+                if (!alreadyFavorited && rowsAffected > 0) {
+                    String updateFavoriteCountSql = "UPDATE properties SET favorite_count = favorite_count + 1 WHERE property_id = ?";
+                    try (PreparedStatement updatePs = connection.prepareStatement(updateFavoriteCountSql)) {
+                        updatePs.setLong(1, propertyId);
+                        updatePs.executeUpdate();
+                    }
+                }
+
+                // 获取更新后的收藏次数
+                int favoriteCount = 0;
+                String getFavoriteCountSql = "SELECT favorite_count FROM properties WHERE property_id = ?";
+                try (PreparedStatement getCountPs = connection.prepareStatement(getFavoriteCountSql)) {
+                    getCountPs.setLong(1, propertyId);
+                    try (ResultSet rs = getCountPs.executeQuery()) {
+                        if (rs.next()) {
+                            favoriteCount = rs.getInt("favorite_count");
+                        }
+                    }
+                }
+
+                // 计算用户收藏房源的总数
+                int userFavoriteTotalCount = 0;
+                String getUserFavoriteCountSql = "SELECT COUNT(*) FROM favorites WHERE user_id = ?";
+                try (PreparedStatement getUserCountPs = connection.prepareStatement(getUserFavoriteCountSql)) {
+                    getUserCountPs.setLong(1, userId);
+                    try (ResultSet rs = getUserCountPs.executeQuery()) {
+                        if (rs.next()) {
+                            userFavoriteTotalCount = rs.getInt(1);
+                        }
+                    }
+                }
+
+                // 如果用户收藏数量是偶数，重新计算该用户的全部用户相似度
+                if (userSimilaritySparkService != null && userFavoriteTotalCount > 0 && userFavoriteTotalCount % 2 == 0) {
+                    System.out.println("用户 " + userId + " 收藏了 " + userFavoriteTotalCount + " 个房源（偶数），触发相似度计算");
+                    // 异步执行，避免阻塞
+                    new Thread(() -> {
+                        try {
+                            userSimilaritySparkService.calculateUserSimilarityIncremental(userId.intValue());
+                        } catch (Exception e) {
+                            System.err.println("触发用户相似度计算失败: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }).start();
+                }
 
                 Map<String, Object> body = new HashMap<String, Object>();
-                body.put("message", "收藏成功");
+                body.put("message", alreadyFavorited ? "已收藏" : "收藏成功");
                 body.put("userId", userId);
                 body.put("propertyId", propertyId);
+                body.put("favoriteCount", favoriteCount);
+                body.put("success", true);
                 return ResponseEntity.status(HttpStatus.CREATED).body(body);
             }
         } catch (SQLException e) {
@@ -119,24 +186,170 @@ public class QueryController {
             @RequestParam("userId") Long userId,
             @RequestParam("propertyId") Long propertyId) {
 
-        String sql = "DELETE FROM favorites WHERE user_id = ? AND property_id = ?";
+        try (Connection connection = getConnection()) {
+            // 删除收藏记录
+            String sql = "DELETE FROM favorites WHERE user_id = ? AND property_id = ?";
+            int affected = 0;
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setLong(1, userId);
+                ps.setLong(2, propertyId);
+                affected = ps.executeUpdate();
+            }
 
-        try (Connection connection = getConnection();
-                PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, userId);
-            ps.setLong(2, propertyId);
-            int affected = ps.executeUpdate();
+            // 如果成功删除，减少收藏次数
+            if (affected > 0) {
+                String updateFavoriteCountSql = "UPDATE properties SET favorite_count = GREATEST(favorite_count - 1, 0) WHERE property_id = ?";
+                try (PreparedStatement updatePs = connection.prepareStatement(updateFavoriteCountSql)) {
+                    updatePs.setLong(1, propertyId);
+                    updatePs.executeUpdate();
+                }
+            }
+
+            // 获取更新后的收藏次数
+            int favoriteCount = 0;
+            String getFavoriteCountSql = "SELECT favorite_count FROM properties WHERE property_id = ?";
+            try (PreparedStatement getCountPs = connection.prepareStatement(getFavoriteCountSql)) {
+                getCountPs.setLong(1, propertyId);
+                try (ResultSet rs = getCountPs.executeQuery()) {
+                    if (rs.next()) {
+                        favoriteCount = rs.getInt("favorite_count");
+                    }
+                }
+            }
+
+            // 计算用户收藏房源的总数（取消收藏后）
+            int userFavoriteTotalCount = 0;
+            if (affected > 0) {
+                String getUserFavoriteCountSql = "SELECT COUNT(*) FROM favorites WHERE user_id = ?";
+                try (PreparedStatement getUserCountPs = connection.prepareStatement(getUserFavoriteCountSql)) {
+                    getUserCountPs.setLong(1, userId);
+                    try (ResultSet rs = getUserCountPs.executeQuery()) {
+                        if (rs.next()) {
+                            userFavoriteTotalCount = rs.getInt(1);
+                        }
+                    }
+                }
+
+                // 如果用户收藏数量是偶数，重新计算该用户的全部用户相似度
+                if (userSimilaritySparkService != null && userFavoriteTotalCount > 0 && userFavoriteTotalCount % 2 == 0) {
+                    System.out.println("用户 " + userId + " 取消收藏后，剩余 " + userFavoriteTotalCount + " 个收藏（偶数），触发相似度计算");
+                    // 异步执行，避免阻塞
+                    new Thread(() -> {
+                        try {
+                            userSimilaritySparkService.calculateUserSimilarityIncremental(userId.intValue());
+                        } catch (Exception e) {
+                            System.err.println("触发用户相似度计算失败: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }).start();
+                }
+            }
 
             Map<String, Object> body = new HashMap<String, Object>();
             body.put("userId", userId);
             body.put("propertyId", propertyId);
             body.put("message", affected > 0 ? "取消收藏成功" : "未找到对应的收藏记录");
+            body.put("favoriteCount", favoriteCount);
+            body.put("userFavoriteTotalCount", userFavoriteTotalCount);
+            body.put("success", affected > 0);
             return ResponseEntity.ok(body);
         } catch (SQLException e) {
             return buildError("取消收藏失败", e);
         }
     }
 
+    /**
+     * 获取房源详情
+     * GET /api/query/property/{propertyId}?userId={userId}
+     * 
+     * 功能：
+     * 1. 返回房源详细信息（价格、户型、位置等）
+     * 2. 自动增加浏览次数（view_count + 1）
+     * 3. 如果提供了userId，检查是否已收藏
+     * 4. 返回收藏次数等信息
+     */
+    @GetMapping("/property/{propertyId}")
+    public ResponseEntity<Map<String, Object>> getPropertyDetail(
+            @PathVariable Long propertyId,
+            @RequestParam(value = "userId", required = false) Long userId) {
+        
+        try (Connection connection = getConnection()) {
+            // 1. 查询房源详细信息
+            String sql = "SELECT p.property_id, p.title, p.status, p.price_info, p.layout_info, " +
+                    "p.basic_info, p.view_count, p.favorite_count, p.updated_at, " +
+                    "c.community_id, c.name AS community_name, c.location_info " +
+                    "FROM properties p " +
+                    "LEFT JOIN communities c ON p.community_id = c.community_id " +
+                    "WHERE p.property_id = ?";
+            
+            Map<String, Object> property = null;
+            int currentViewCount = 0;
+            
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setLong(1, propertyId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        property = buildProperty(rs);
+                        currentViewCount = rs.getInt("view_count");
+                    } else {
+                        Map<String, Object> error = new HashMap<>();
+                        error.put("message", "房源不存在");
+                        error.put("propertyId", propertyId);
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+                    }
+                }
+            }
+            
+            // 2. 增加浏览次数
+            String updateViewCountSql = "UPDATE properties SET view_count = view_count + 1 WHERE property_id = ?";
+            try (PreparedStatement ps = connection.prepareStatement(updateViewCountSql)) {
+                ps.setLong(1, propertyId);
+                ps.executeUpdate();
+            }
+            
+            // 更新返回的浏览次数
+            if (property != null) {
+                property.put("viewCount", currentViewCount + 1);
+            }
+            
+            // 3. 如果提供了userId，检查是否已收藏
+            boolean isFavorited = false;
+            if (userId != null) {
+                String checkFavoriteSql = "SELECT COUNT(*) FROM favorites WHERE user_id = ? AND property_id = ?";
+                try (PreparedStatement ps = connection.prepareStatement(checkFavoriteSql)) {
+                    ps.setLong(1, userId);
+                    ps.setLong(2, propertyId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next() && rs.getInt(1) > 0) {
+                            isFavorited = true;
+                        }
+                    }
+                }
+            }
+            
+            // 4. 记录浏览历史（如果提供了userId）
+            if (userId != null) {
+                try {
+                    recordBrowseHistory(connection, userId, propertyId, null);
+                } catch (Exception e) {
+                    // 浏览记录保存失败不影响详情返回，只记录日志
+                    System.err.println("记录浏览历史失败: " + e.getMessage());
+                }
+            }
+            
+            // 5. 构建返回结果
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("property", property);
+            result.put("isFavorited", isFavorited);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (SQLException e) {
+            return buildError("获取房源详情失败", e);
+        }
+    }
+    
     /**
      * 记录房源浏览。
      * 点击房源时调用此接口，会：
@@ -275,6 +488,32 @@ public class QueryController {
             @RequestParam(value = "userId", required = false) Long userId,
             @RequestParam(value = "source", required = false) String source) {
 
+        // 如果提供了keyword（小区名称），从transaction_records表的transaction_data JSON中搜索community_name
+        if (hasText(keyword)) {
+            System.out.println("\n[Search] ========================================");
+            System.out.println("[Search] Searching by community name in transaction_records table");
+            System.out.println("[Search] Keyword: " + keyword);
+            System.out.println("[Search] Note: Matching against transaction_data JSON field -> community_name");
+            System.out.println("[Search] ========================================\n");
+            
+            ResponseEntity<Map<String, Object>> transactionResult = searchFromTransactionRecords(keyword, minPrice, maxPrice, userId, source);
+            Map<String, Object> transactionBody = (Map<String, Object>) transactionResult.getBody();
+            if (transactionBody != null) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> items = (List<Map<String, Object>>) transactionBody.get("items");
+                // 如果transaction_records有结果，直接返回
+                if (items != null && !items.isEmpty()) {
+                    System.out.println("\n[Search] ✓ Found " + items.size() + " results from transaction_records");
+                    System.out.println("[Search] Community names matched: " + keyword);
+                    return transactionResult;
+                } else {
+                    System.out.println("\n[Search] ✗ No results found in transaction_records for community_name: " + keyword);
+                    System.out.println("[Search] Falling back to properties table search...\n");
+                }
+            }
+        }
+
+        // 使用原来的properties表搜索逻辑（包括fallback情况）
         String baseSql = "SELECT p.property_id, p.title, p.status, p.price_info, p.layout_info, p.basic_info, " +
                 "p.view_count, p.favorite_count, p.updated_at, c.name AS community_name, c.location_info " +
                 "FROM properties p LEFT JOIN communities c ON p.community_id = c.community_id WHERE 1 = 1";
@@ -381,6 +620,10 @@ public class QueryController {
 
         sqlBuilder.append(orderByClause);
 
+        System.out.println("[Search] Searching properties table:");
+        System.out.println("  - SQL: " + sqlBuilder.toString());
+        System.out.println("  - Parameters count: " + params.size());
+
         try (Connection connection = getConnection();
                 PreparedStatement statement = connection.prepareStatement(sqlBuilder.toString())) {
 
@@ -398,6 +641,8 @@ public class QueryController {
                     propertyIds.add(propertyId);
                 }
             }
+            
+            System.out.println("[Search] Properties table search completed: " + items.size() + " results found");
 
             // 自动增加所有返回房源的访问次数
             if (!propertyIds.isEmpty()) {
@@ -648,6 +893,230 @@ public class QueryController {
             });
         } catch (Exception e) {
             return json;
+        }
+    }
+
+    /**
+     * 从transaction_records表搜索房源（根据小区名称和价格区间）
+     */
+    private ResponseEntity<Map<String, Object>> searchFromTransactionRecords(
+            String communityName,
+            Double minPrice,
+            Double maxPrice,
+            Long userId,
+            String source) {
+        
+        System.out.println("[Search] Searching transaction_records table:");
+        System.out.println("  - Community name: " + communityName);
+        System.out.println("  - Min price: " + minPrice);
+        System.out.println("  - Max price: " + maxPrice);
+        
+        try (Connection connection = getConnection()) {
+            // 构建SQL查询，从transaction_records表查询
+            StringBuilder sqlBuilder = new StringBuilder();
+            sqlBuilder.append("SELECT DISTINCT ")
+                    .append("tr.transaction_id, ")
+                    .append("JSON_UNQUOTE(JSON_EXTRACT(tr.transaction_data, '$.community_name')) AS community_name, ")
+                    .append("CAST(JSON_UNQUOTE(JSON_EXTRACT(tr.transaction_data, '$.total_price')) AS DECIMAL(12,2)) AS total_price, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.area') AS area, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.bedroom_count') AS bedroom_count, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.living_room_count') AS living_room_count, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.bathroom_count') AS bathroom_count, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.orientation') AS orientation, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.floor') AS floor, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.total_floors') AS total_floors, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.decoration') AS decoration, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.build_year') AS build_year, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.property_type') AS property_type, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.district') AS district, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.city') AS city, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.province') AS province, ")
+                    .append("JSON_EXTRACT(tr.transaction_data, '$.address') AS address, ")
+                    .append("tr.transaction_data, ")
+                    .append("tr.created_at ")
+                    .append("FROM transaction_records tr ")
+                    .append("WHERE 1 = 1");
+            
+            List<Object> params = new ArrayList<Object>();
+            
+            // 小区名称筛选 - 从transaction_data JSON中的community_name字段匹配
+            if (hasText(communityName)) {
+                // 使用LIKE进行模糊匹配，支持部分匹配
+                // 注意：这里匹配的是 transaction_data JSON 中的 community_name 字段
+                sqlBuilder.append(" AND JSON_UNQUOTE(JSON_EXTRACT(tr.transaction_data, '$.community_name')) LIKE ?");
+                String searchPattern = "%" + communityName.trim() + "%";
+                params.add(searchPattern);
+                System.out.println("  - Community name search pattern: " + searchPattern);
+                System.out.println("  - SQL condition: JSON_UNQUOTE(JSON_EXTRACT(tr.transaction_data, '$.community_name')) LIKE ?");
+            }
+            
+            // 价格区间筛选
+            if (minPrice != null) {
+                sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(tr.transaction_data, '$.total_price')) AS DECIMAL(12,2)) >= ?");
+                params.add(minPrice);
+            }
+            
+            if (maxPrice != null) {
+                sqlBuilder.append(" AND CAST(JSON_UNQUOTE(JSON_EXTRACT(tr.transaction_data, '$.total_price')) AS DECIMAL(12,2)) <= ?");
+                params.add(maxPrice);
+            }
+            
+            // 按创建时间倒序，限制返回20条
+            sqlBuilder.append(" ORDER BY tr.created_at DESC LIMIT 20");
+            
+            String finalSql = sqlBuilder.toString();
+            System.out.println("  - Final SQL: " + finalSql);
+            System.out.println("  - SQL Parameters: " + params);
+            
+            List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+            
+            try (PreparedStatement ps = connection.prepareStatement(finalSql)) {
+                for (int i = 0; i < params.size(); i++) {
+                    ps.setObject(i + 1, params.get(i));
+                    System.out.println("    Parameter " + (i + 1) + ": " + params.get(i));
+                }
+                
+                try (ResultSet rs = ps.executeQuery()) {
+                    int rowCount = 0;
+                    while (rs.next()) {
+                        rowCount++;
+                        Map<String, Object> item = buildPropertyFromTransactionRecord(rs);
+                        String foundCommunityName = (String) item.get("communityName");
+                        System.out.println("    Row " + rowCount + ": Found community_name = " + foundCommunityName);
+                        items.add(item);
+                    }
+                    System.out.println("  - Total rows fetched: " + rowCount);
+                }
+            }
+            
+            System.out.println("[Search] Transaction records search completed: " + items.size() + " results found");
+            
+            Map<String, Object> response = new HashMap<String, Object>();
+            response.put("items", items);
+            response.put("count", items.size());
+            response.put("message", "查询成功");
+            return ResponseEntity.ok(response);
+            
+        } catch (SQLException e) {
+            System.err.println("[Search] Error searching transaction_records: " + e.getMessage());
+            e.printStackTrace();
+            return buildError("查询失败", e);
+        }
+    }
+    
+    /**
+     * 从transaction_records的ResultSet构建Property对象
+     */
+    private Map<String, Object> buildPropertyFromTransactionRecord(ResultSet rs) throws SQLException {
+        Map<String, Object> item = new HashMap<String, Object>();
+        
+        // 基本信息
+        item.put("propertyId", rs.getLong("transaction_id")); // 使用transaction_id作为propertyId
+        item.put("title", rs.getString("community_name") + " 房源");
+        item.put("status", "for_sale");
+        item.put("communityName", rs.getString("community_name"));
+        item.put("viewCount", 0);
+        item.put("favoriteCount", 0);
+        item.put("updatedAt", rs.getTimestamp("created_at"));
+        
+        // 构建priceInfo
+        Map<String, Object> priceInfo = new HashMap<String, Object>();
+        Double totalPrice = rs.getDouble("total_price");
+        if (rs.wasNull()) {
+            totalPrice = 0.0;
+        }
+        priceInfo.put("total_price", totalPrice);
+        priceInfo.put("unit_price", 0.0); // transaction_records可能没有unit_price
+        item.put("priceInfo", priceInfo);
+        
+        // 构建layoutInfo
+        Map<String, Object> layoutInfo = new HashMap<String, Object>();
+        layoutInfo.put("area", getDoubleFromResultSet(rs, "area"));
+        layoutInfo.put("bedroom_count", getIntFromResultSet(rs, "bedroom_count"));
+        layoutInfo.put("living_room_count", getIntFromResultSet(rs, "living_room_count"));
+        layoutInfo.put("bathroom_count", getIntFromResultSet(rs, "bathroom_count"));
+        layoutInfo.put("orientation", getStringFromResultSet(rs, "orientation"));
+        layoutInfo.put("floor", getIntFromResultSet(rs, "floor"));
+        layoutInfo.put("total_floors", getIntFromResultSet(rs, "total_floors"));
+        item.put("layoutInfo", layoutInfo);
+        
+        // 构建basicInfo
+        Map<String, Object> basicInfo = new HashMap<String, Object>();
+        basicInfo.put("property_type", getStringFromResultSet(rs, "property_type"));
+        basicInfo.put("decoration", getStringFromResultSet(rs, "decoration"));
+        basicInfo.put("build_year", getIntFromResultSet(rs, "build_year"));
+        item.put("basicInfo", basicInfo);
+        
+        // 构建locationInfo
+        Map<String, Object> locationInfo = new HashMap<String, Object>();
+        locationInfo.put("province", getStringFromResultSet(rs, "province"));
+        locationInfo.put("city", getStringFromResultSet(rs, "city"));
+        locationInfo.put("district", getStringFromResultSet(rs, "district"));
+        locationInfo.put("address", getStringFromResultSet(rs, "address"));
+        item.put("locationInfo", locationInfo);
+        
+        return item;
+    }
+    
+    /**
+     * 从ResultSet安全获取Double值
+     */
+    private Double getDoubleFromResultSet(ResultSet rs, String columnName) throws SQLException {
+        try {
+            Object value = rs.getObject(columnName);
+            if (value == null || rs.wasNull()) {
+                return null;
+            }
+            if (value instanceof Number) {
+                return ((Number) value).doubleValue();
+            }
+            if (value instanceof String) {
+                try {
+                    return Double.parseDouble((String) value);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
+        } catch (SQLException e) {
+            return null;
+        }
+    }
+    
+    /**
+     * 从ResultSet安全获取Integer值
+     */
+    private Integer getIntFromResultSet(ResultSet rs, String columnName) throws SQLException {
+        try {
+            Object value = rs.getObject(columnName);
+            if (value == null || rs.wasNull()) {
+                return null;
+            }
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
+            if (value instanceof String) {
+                try {
+                    return Integer.parseInt((String) value);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
+        } catch (SQLException e) {
+            return null;
+        }
+    }
+    
+    /**
+     * 从ResultSet安全获取String值
+     */
+    private String getStringFromResultSet(ResultSet rs, String columnName) throws SQLException {
+        try {
+            String value = rs.getString(columnName);
+            return (value != null && !rs.wasNull()) ? value : null;
+        } catch (SQLException e) {
+            return null;
         }
     }
 

@@ -362,6 +362,13 @@
             <artifactId>commons-compiler</artifactId>
             <version>3.1.9</version>
         </dependency>
+        
+        <!-- ONNX Runtime for Java - 用于加载和运行ONNX模型 -->
+        <dependency>
+            <groupId>com.microsoft.onnxruntime</groupId>
+            <artifactId>onnxruntime</artifactId>
+            <version>1.16.0</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -118,19 +118,33 @@ public class ProfileController {
         }
 
         try {
+            System.out.println("\n[API] Price prediction request received:");
+            System.out.println("  - City: " + city);
+            System.out.println("  - Features count: " + features.size());
+            
+            long apiStartTime = System.currentTimeMillis();
             double predicted = predictionService.predict(city, features);
-        Map<String, Object> result = new HashMap<String, Object>();
+            long apiEndTime = System.currentTimeMillis();
+            
+            System.out.println("[API] Prediction completed in " + (apiEndTime - apiStartTime) + " ms");
+            System.out.println("[API] Returning result: " + String.format("%.4f", predicted) + " 万元/㎡\n");
+            
+            Map<String, Object> result = new HashMap<String, Object>();
             result.put("city", city);
             result.put("features", features);
             result.put("predictedPricePerSquareMeter", predicted);
-        result.put("unit", "万元/㎡");
+            result.put("unit", "万元/㎡");
             result.put("message", "预测成功");
-        return ResponseEntity.ok(result);
+            return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
+            System.err.println("[API ERROR] Invalid argument: " + e.getMessage());
             return error(HttpStatus.BAD_REQUEST, e.getMessage());
         } catch (FileNotFoundException e) {
+            System.err.println("[API ERROR] Model file not found: " + e.getMessage());
             return error(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (Exception e) {
+            System.err.println("[API ERROR] Prediction failed: " + e.getMessage());
+            e.printStackTrace();
             return serverError("预测失败", e);
         }
     }
