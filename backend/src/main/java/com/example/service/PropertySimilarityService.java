@@ -573,8 +573,10 @@ public class PropertySimilarityService {
             indexToPropertyId.put(index++, f.propertyId);
         }
         
-        // 使用纯Java实现K-Means聚类
-        int[] clusters = kMeansClustering(vectors, k, MAX_ITERATIONS);
+        // 使用纯Java实现K-Means聚类（返回聚类结果和中心点）
+        KMeansResult clusteringResult = kMeansClusteringWithCentroids(vectors, k, MAX_ITERATIONS);
+        int[] clusters = clusteringResult.clusters;
+        double[][] centroids = clusteringResult.centroids;
         
         // 构建propertyId到cluster的映射
         Map<Integer, Integer> clusterMap = new HashMap<>();
@@ -587,6 +589,27 @@ public class PropertySimilarityService {
         for (int cluster : clusters) {
             clusterSizes.put(cluster, clusterSizes.getOrDefault(cluster, 0) + 1);
         }
+        
+        // 计算聚类评估指标
+        System.out.println("\n========== 聚类评估指标 ==========");
+        double wssse = calculateWSSSE(vectors, clusters, centroids);
+        double silhouetteScore = calculateSilhouetteScore(vectors, clusters, centroids);
+        double daviesBouldinIndex = calculateDaviesBouldinIndex(vectors, clusters, centroids);
+        Map<String, Double> clusterMetrics = calculateClusterMetrics(vectors, clusters, centroids);
+        
+        System.out.println("WSSSE (Within Set Sum of Squared Errors): " + String.format("%.4f", wssse));
+        System.out.println("Silhouette Score (轮廓系数): " + String.format("%.4f", silhouetteScore) + 
+                          " (范围: -1到1，越接近1越好)");
+        System.out.println("Davies-Bouldin Index (DB指数): " + String.format("%.4f", daviesBouldinIndex) + 
+                          " (越小越好)");
+        System.out.println("Average Intra-Cluster Distance (平均类内距离): " + 
+                          String.format("%.4f", clusterMetrics.get("avgIntraClusterDist")));
+        System.out.println("Average Inter-Cluster Distance (平均类间距离): " + 
+                          String.format("%.4f", clusterMetrics.get("avgInterClusterDist")));
+        System.out.println("Separation Ratio (分离度): " + 
+                          String.format("%.4f", clusterMetrics.get("separationRatio")) + 
+                          " (类间距离/类内距离，越大越好)");
+        System.out.println("=====================================\n");
         
         // 使用Spark RDD验证数据（确保Spark参与计算）
         long count = featuresRDD.count();
@@ -715,8 +738,18 @@ public class PropertySimilarityService {
      * K-Means聚类算法（纯Java实现）
      */
     private int[] kMeansClustering(List<double[]> vectors, int k, int maxIterations) {
+        KMeansResult result = kMeansClusteringWithCentroids(vectors, k, maxIterations);
+        return result.clusters;
+    }
+    
+    /**
+     * K-Means聚类算法（返回聚类结果和中心点，用于评估指标计算）
+     */
+    private KMeansResult kMeansClusteringWithCentroids(List<double[]> vectors, int k, int maxIterations) {
         int n = vectors.size();
-        if (n == 0) return new int[0];
+        if (n == 0) {
+            return new KMeansResult(new int[0], new double[0][0]);
+        }
         
         int dim = vectors.get(0).length;
         double[][] centroids = new double[k][dim];
@@ -771,7 +804,186 @@ public class PropertySimilarityService {
             }
         }
         
-        return clusters;
+        return new KMeansResult(clusters, centroids);
+    }
+    
+    /**
+     * 聚类结果内部类（包含聚类分配和中心点）
+     */
+    private static class KMeansResult {
+        int[] clusters;
+        double[][] centroids;
+        
+        KMeansResult(int[] clusters, double[][] centroids) {
+            this.clusters = clusters;
+            this.centroids = centroids;
+        }
+    }
+    
+    /**
+     * 计算WSSSE（Within Set Sum of Squared Errors）- 类内平方和误差
+     */
+    private double calculateWSSSE(List<double[]> vectors, int[] clusters, double[][] centroids) {
+        double wssse = 0.0;
+        for (int i = 0; i < vectors.size(); i++) {
+            int cluster = clusters[i];
+            double dist = euclideanDistance(vectors.get(i), centroids[cluster]);
+            wssse += dist * dist;
+        }
+        return wssse;
+    }
+    
+    /**
+     * 计算Silhouette Score（轮廓系数）
+     * 范围：-1到1，越接近1表示聚类效果越好
+     */
+    private double calculateSilhouetteScore(List<double[]> vectors, int[] clusters, double[][] centroids) {
+        int n = vectors.size();
+        if (n < 2) return 0.0;
+        
+        double totalSilhouette = 0.0;
+        int validCount = 0;
+        
+        for (int i = 0; i < n; i++) {
+            int clusterI = clusters[i];
+            double[] vectorI = vectors.get(i);
+            
+            // 计算a(i)：同一簇内其他点的平均距离
+            double ai = 0.0;
+            int sameClusterCount = 0;
+            for (int j = 0; j < n; j++) {
+                if (i != j && clusters[j] == clusterI) {
+                    ai += euclideanDistance(vectorI, vectors.get(j));
+                    sameClusterCount++;
+                }
+            }
+            if (sameClusterCount > 0) {
+                ai /= sameClusterCount;
+            } else {
+                ai = 0.0;
+            }
+            
+            // 计算b(i)：到最近其他簇的平均距离
+            double bi = Double.MAX_VALUE;
+            for (int c = 0; c < centroids.length; c++) {
+                if (c != clusterI) {
+                    double avgDist = 0.0;
+                    int otherClusterCount = 0;
+                    for (int j = 0; j < n; j++) {
+                        if (clusters[j] == c) {
+                            avgDist += euclideanDistance(vectorI, vectors.get(j));
+                            otherClusterCount++;
+                        }
+                    }
+                    if (otherClusterCount > 0) {
+                        avgDist /= otherClusterCount;
+                        bi = Math.min(bi, avgDist);
+                    }
+                }
+            }
+            
+            if (bi == Double.MAX_VALUE) {
+                bi = ai; // 如果只有一个簇，设为ai
+            }
+            
+            // 计算轮廓系数
+            if (Math.max(ai, bi) > 0) {
+                double silhouette = (bi - ai) / Math.max(ai, bi);
+                totalSilhouette += silhouette;
+                validCount++;
+            }
+        }
+        
+        return validCount > 0 ? totalSilhouette / validCount : 0.0;
+    }
+    
+    /**
+     * 计算Davies-Bouldin Index（DB指数）
+     * 值越小表示聚类效果越好
+     */
+    private double calculateDaviesBouldinIndex(List<double[]> vectors, int[] clusters, double[][] centroids) {
+        int k = centroids.length;
+        if (k < 2) return 0.0;
+        
+        // 计算每个簇的平均类内距离
+        double[] intraClusterDists = new double[k];
+        int[] clusterSizes = new int[k];
+        
+        for (int i = 0; i < vectors.size(); i++) {
+            int cluster = clusters[i];
+            clusterSizes[cluster]++;
+            intraClusterDists[cluster] += euclideanDistance(vectors.get(i), centroids[cluster]);
+        }
+        
+        for (int i = 0; i < k; i++) {
+            if (clusterSizes[i] > 0) {
+                intraClusterDists[i] /= clusterSizes[i];
+            }
+        }
+        
+        // 计算DB指数
+        double dbIndex = 0.0;
+        for (int i = 0; i < k; i++) {
+            if (clusterSizes[i] == 0) continue;
+            
+            double maxRatio = 0.0;
+            for (int j = 0; j < k; j++) {
+                if (i != j && clusterSizes[j] > 0) {
+                    double interClusterDist = euclideanDistance(centroids[i], centroids[j]);
+                    double ratio = (intraClusterDists[i] + intraClusterDists[j]) / interClusterDist;
+                    maxRatio = Math.max(maxRatio, ratio);
+                }
+            }
+            dbIndex += maxRatio;
+        }
+        
+        return dbIndex / k;
+    }
+    
+    /**
+     * 计算聚类指标（类内距离、类间距离、分离度等）
+     */
+    private Map<String, Double> calculateClusterMetrics(List<double[]> vectors, int[] clusters, double[][] centroids) {
+        Map<String, Double> metrics = new HashMap<>();
+        
+        int k = centroids.length;
+        double totalIntraClusterDist = 0.0;
+        int totalIntraClusterPairs = 0;
+        
+        // 计算平均类内距离
+        for (int i = 0; i < vectors.size(); i++) {
+            int clusterI = clusters[i];
+            for (int j = i + 1; j < vectors.size(); j++) {
+                if (clusters[j] == clusterI) {
+                    totalIntraClusterDist += euclideanDistance(vectors.get(i), vectors.get(j));
+                    totalIntraClusterPairs++;
+                }
+            }
+        }
+        double avgIntraClusterDist = totalIntraClusterPairs > 0 ? 
+            totalIntraClusterDist / totalIntraClusterPairs : 0.0;
+        
+        // 计算平均类间距离（簇中心之间的距离）
+        double totalInterClusterDist = 0.0;
+        int interClusterPairs = 0;
+        for (int i = 0; i < k; i++) {
+            for (int j = i + 1; j < k; j++) {
+                totalInterClusterDist += euclideanDistance(centroids[i], centroids[j]);
+                interClusterPairs++;
+            }
+        }
+        double avgInterClusterDist = interClusterPairs > 0 ? 
+            totalInterClusterDist / interClusterPairs : 0.0;
+        
+        // 计算分离度（类间距离/类内距离）
+        double separationRatio = avgIntraClusterDist > 0 ? 
+            avgInterClusterDist / avgIntraClusterDist : 0.0;
+        
+        metrics.put("avgIntraClusterDist", avgIntraClusterDist);
+        metrics.put("avgInterClusterDist", avgInterClusterDist);
+        metrics.put("separationRatio", separationRatio);
+        
+        return metrics;
     }
     
     /**
