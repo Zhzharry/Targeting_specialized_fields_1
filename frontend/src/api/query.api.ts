@@ -13,6 +13,19 @@ export const queryAPI = {
     return api.get('/query', { params })
   },
 
+  // 3.1.1 获取房源详情（包含浏览次数加一、收藏状态检查）
+  getPropertyDetail(propertyId: number, userId?: number): Promise<{
+    success: boolean
+    property: PropertyDetail
+    isFavorited: boolean
+  }> {
+    const params: Record<string, number> = {}
+    if (userId) {
+      params.userId = userId
+    }
+    return api.get(`/query/property/${propertyId}`, { params })
+  },
+
   // 3.2 收藏房源
   addFavorite(userId: number, propertyId: number): Promise<FavoriteResponse> {
     return api.post('/query/favorite', null, {

@@ -40,12 +40,39 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="输入小区名、区域或关键词..."
+          placeholder="输入小区名称..."
           @focus="showSuggestions = true"
           @blur="onSearchBlur"
           @keydown.enter="performSearch"
         />
         <button @click="performSearch" class="search-btn">搜索</button>
+      </div>
+      
+      <!-- 价格区间筛选 -->
+      <div class="price-filter">
+        <div class="price-input-group">
+          <label class="price-label">最低价（万元）</label>
+          <input
+            v-model.number="minPrice"
+            type="number"
+            placeholder="最低价"
+            class="price-input"
+            min="0"
+            step="0.1"
+          />
+        </div>
+        <div class="price-separator">-</div>
+        <div class="price-input-group">
+          <label class="price-label">最高价（万元）</label>
+          <input
+            v-model.number="maxPrice"
+            type="number"
+            placeholder="最高价"
+            class="price-input"
+            min="0"
+            step="0.1"
+          />
+        </div>
       </div>
 
       <!-- 搜索建议和搜索历史 -->
@@ -314,6 +341,8 @@ const currentUserId = computed(() => {
 
 // 搜索状态
 const searchQuery = ref('')
+const minPrice = ref<number | null>(null)
+const maxPrice = ref<number | null>(null)
 const showSuggestions = ref(false)
 const loading = ref(false)
 const activeTab = ref('recommend')
@@ -741,20 +770,34 @@ const performSearch = async () => {
 
   try {
     // 调用真实的房源查询API
-    const params = {
+    const params: any = {
       keyword: searchQuery.value.trim() || undefined,
+      // 价格区间筛选
+      minPrice: minPrice.value || undefined,
+      maxPrice: maxPrice.value || undefined,
       // 可以根据activeFilter添加更多筛选条件
       ...(activeFilter.value !== 'all' && getFilterParams(activeFilter.value))
     }
 
+    console.log('发送搜索请求，参数:', params)
     const response = await queryAPI.searchProperties(params)
+    console.log('搜索API响应:', response)
+    
+    if (response && response.items) {
     searchResults.value = response.items
-
-    console.log('搜索结果:', response)
+      console.log('搜索结果数量:', response.items.length)
+      if (response.items.length === 0) {
+        console.warn('搜索返回空结果，关键词:', searchQuery.value)
+      }
+    } else {
+      console.warn('搜索响应格式异常:', response)
+      searchResults.value = []
+    }
   } catch (error) {
     console.error('搜索失败:', error)
-    // 如果API调用失败，使用模拟数据作为fallback
-    searchResults.value = getMockSearchResults()
+    // 不再使用模拟数据，直接显示空结果，避免误导用户
+    searchResults.value = []
+    predictionError.value = '搜索失败，请稍后重试'
   } finally {
     loading.value = false
 
@@ -823,29 +866,69 @@ const resetSearch = () => {
 }
 
 const viewProperty = async (propertyId: number) => {
-  // 查找房源详情（从搜索结果或热门推荐中查找）
+  try {
+    // 获取当前用户ID（如果已登录）
+    const userId = currentUserId.value || undefined
+    
+    // 调用新的房源详情接口（会自动增加浏览次数、检查收藏状态）
+    const response = await queryAPI.getPropertyDetail(propertyId, userId)
+    
+    if (response.success && response.property) {
+      // 将isFavorited添加到property对象中，供PropertyDetailModal使用
+      const propertyWithFavorite = {
+        ...response.property,
+        isFavorited: response.isFavorited
+      }
+      
+      selectedProperty.value = propertyWithFavorite as PropertyDetail
+      showPropertyModal.value = true
+      
+      console.log('房源详情加载成功，收藏状态:', response.isFavorited)
+      console.log('浏览次数已更新为:', response.property.viewCount)
+      console.log('收藏次数:', response.property.favoriteCount)
+    } else {
+      alert('房源信息未找到')
+    }
+  } catch (error) {
+    console.error('获取房源详情失败:', error)
+    // 降级处理：如果新接口失败，尝试使用旧的方式
   const property = searchResults.value.find(p => p.propertyId === propertyId) ||
                    hotProperties.value.find(p => p.propertyId === propertyId)
-
   if (property) {
     selectedProperty.value = property
     showPropertyModal.value = true
 
-    // 记录浏览
-    try {
-      const userId = 1 // 暂时使用固定用户ID，后续从store获取
-      await queryAPI.recordBrowse(userId, propertyId)
-    } catch (error) {
-      console.error('记录浏览失败:', error)
+      // 尝试记录浏览
+      if (currentUserId.value) {
+        try {
+          await queryAPI.recordBrowse(currentUserId.value, propertyId)
+        } catch (err) {
+          console.error('记录浏览失败:', err)
+        }
     }
   } else {
     alert('房源信息未找到')
+    }
   }
 }
 
 // 查看推荐的房源（其他用户也在看）
 const viewRecommendationProperty = async (item: RecommendationItem) => {
-  // 构建PropertyDetail对象
+  try {
+    // 使用新的房源详情接口获取完整信息
+    const userId = currentUserId.value || undefined
+    const response = await queryAPI.getPropertyDetail(item.propertyId, userId)
+    
+    if (response.success && response.property) {
+      const propertyWithFavorite = {
+        ...response.property,
+        isFavorited: response.isFavorited
+      }
+      
+      selectedProperty.value = propertyWithFavorite as PropertyDetail
+      showPropertyModal.value = true
+    } else {
+      // 降级处理：如果接口失败，使用原有逻辑
   const property: PropertyDetail = {
     propertyId: item.propertyId,
     title: item.title,
@@ -872,20 +955,16 @@ const viewRecommendationProperty = async (item: RecommendationItem) => {
       province: '',
       city: '',
       district: ''
-    }
-  }
+        },
+        isFavorited: false
+      } as any
 
   selectedProperty.value = property
   showPropertyModal.value = true
-
-  // 记录浏览（来源：recommendation）
-  if (currentUserId.value) {
-    try {
-      await queryAPI.recordBrowse(currentUserId.value, item.propertyId, 'recommendation')
-      console.log('记录推荐房源浏览成功')
-    } catch (error) {
-      console.error('记录推荐房源浏览失败:', error)
     }
+    } catch (error) {
+    console.error('获取推荐房源详情失败:', error)
+    alert('获取房源详情失败')
   }
 }
 
@@ -893,7 +972,27 @@ const viewRecommendationProperty = async (item: RecommendationItem) => {
 const viewDiscoverProperty = async (card: PropertyCard) => {
   if (!card) return
 
-  // 从 summary 解析社区名、面积与卧室数量（容错处理）
+  try {
+    // 使用新的房源详情接口获取完整信息
+    const userId = currentUserId.value || undefined
+    const response = await queryAPI.getPropertyDetail(card.propertyId, userId)
+    
+    if (response.success && response.property) {
+      const propertyWithFavorite = {
+        ...response.property,
+        isFavorited: response.isFavorited
+      }
+      
+      selectedProperty.value = propertyWithFavorite as PropertyDetail
+      showPropertyModal.value = true
+      return
+    }
+  } catch (error) {
+    console.error('获取房源详情失败:', error)
+    // 降级处理：使用原有逻辑
+  }
+
+  // 降级处理：从 summary 解析社区名、面积与卧室数量（容错处理）
   // 示例："阳光小区 · 85㎡ · 2室1厅1卫"
   const parts = (card.summary || '').split('·').map(s => s.trim())
   const community = parts[0] || ''
@@ -932,17 +1031,9 @@ const viewDiscoverProperty = async (card: PropertyCard) => {
     }
   }
 
+  (mapped as any).isFavorited = false
   selectedProperty.value = mapped
   showPropertyModal.value = true
-
-  // 记录浏览
-  if (currentUserId.value) {
-    try {
-      await queryAPI.recordBrowse(currentUserId.value, card.propertyId)
-    } catch (error) {
-      console.error('记录浏览失败:', error)
-    }
-  }
 }
 
 // 处理收藏
@@ -953,13 +1044,49 @@ const handleFavorite = async (propertyId: number) => {
       return
     }
 
+    // 检查当前是否已收藏
+    const currentProperty = selectedProperty.value
+    const isCurrentlyFavorited = (currentProperty as any)?.isFavorited || false
+
+    if (isCurrentlyFavorited) {
+      // 取消收藏
+      console.log('取消收藏请求 - userId:', currentUserId.value, 'propertyId:', propertyId)
+      await queryAPI.removeFavorite(currentUserId.value, propertyId)
+      alert('已取消收藏！')
+    } else {
+      // 添加收藏
     console.log('收藏请求 - userId:', currentUserId.value, 'propertyId:', propertyId)
-    const response = await queryAPI.addFavorite(currentUserId.value, propertyId)
-    console.log('收藏成功响应:', response)
+      await queryAPI.addFavorite(currentUserId.value, propertyId)
     alert('收藏成功！')
+    }
+
+    // 重新获取房源详情，更新收藏状态和收藏次数
+    try {
+      const detailResponse = await queryAPI.getPropertyDetail(propertyId, currentUserId.value)
+      if (detailResponse.success && detailResponse.property) {
+        const updatedProperty = {
+          ...detailResponse.property,
+          isFavorited: detailResponse.isFavorited
+        }
+        selectedProperty.value = updatedProperty as PropertyDetail
+        console.log('房源详情已更新，收藏次数:', detailResponse.property.favoriteCount)
+      }
+    } catch (detailError) {
+      console.error('更新房源详情失败:', detailError)
+      // 如果获取详情失败，至少更新收藏状态
+      if (currentProperty) {
+        (currentProperty as any).isFavorited = !isCurrentlyFavorited
+        // 更新收藏次数（粗略估计）
+        if (!isCurrentlyFavorited) {
+          currentProperty.favoriteCount = (currentProperty.favoriteCount || 0) + 1
+        } else {
+          currentProperty.favoriteCount = Math.max(0, (currentProperty.favoriteCount || 1) - 1)
+        }
+      }
+    }
   } catch (error: unknown) {
-    console.error('收藏失败:', error)
-    let errorMsg = '收藏失败，请重试'
+    console.error('收藏操作失败:', error)
+    let errorMsg = '操作失败，请重试'
     if (error && typeof error === 'object') {
       const err = error as { response?: { data?: { message?: string } }; message?: string }
       console.error('错误详情:', err.response?.data)
@@ -1412,6 +1539,66 @@ onMounted(() => {
 
 .search-box input::placeholder {
   color: rgba(212, 175, 55, 0.5);
+}
+
+.price-filter {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.price-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.price-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(212, 175, 55, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.price-input {
+  padding: 12px 16px;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  border-radius: 10px;
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+  color: #e8e8e8;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+}
+
+.price-input:focus {
+  outline: none;
+  border-color: #d4af37;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 3px rgba(212, 175, 55, 0.15),
+    0 2px 8px rgba(212, 175, 55, 0.2);
+}
+
+.price-input::placeholder {
+  color: rgba(212, 175, 55, 0.4);
+}
+
+.price-separator {
+  font-size: 20px;
+  font-weight: 700;
+  color: #d4af37;
+  margin-top: 24px;
+  text-shadow: 0 2px 4px rgba(212, 175, 55, 0.3);
 }
 
 .search-btn {

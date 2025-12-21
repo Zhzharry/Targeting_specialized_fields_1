@@ -37,21 +37,20 @@
               <span class="label">面积:</span>
               <span class="value">{{ property.layoutInfo?.area || '暂无' }}㎡</span>
             </div>
-            <div class="detail-row">
+            <div class="detail-row" v-if="property.layoutInfo?.total_floors">
               <span class="label">楼层:</span>
-              <span class="value">暂无信息</span>
+              <span class="value">
+                <template v-if="property.layoutInfo?.floor">
+                  {{ property.layoutInfo.floor }}/{{ property.layoutInfo.total_floors }}层
+                </template>
+                <template v-else>
+                  {{ property.layoutInfo.total_floors }}层
+                </template>
+              </span>
             </div>
-            <div class="detail-row">
+            <div class="detail-row" v-if="property.layoutInfo?.orientation">
               <span class="label">朝向:</span>
-              <span class="value">暂无信息</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">装修:</span>
-              <span class="value">暂无信息</span>
-            </div>
-            <div class="detail-row">
-              <span class="label">年代:</span>
-              <span class="value">{{ property.basicInfo?.build_year || '暂无' }}年</span>
+              <span class="value">{{ property.layoutInfo.orientation }}</span>
             </div>
           </div>
         </div>
@@ -80,10 +79,6 @@
           <div class="stat-item">
             <span class="stat-label">浏览次数</span>
             <span class="stat-value">{{ property.viewCount || 0 }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">收藏次数</span>
-            <span class="stat-value">{{ property.favoriteCount || 0 }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">更新时间</span>
@@ -144,13 +139,18 @@ const communityName = computed(() => {
 })
 
 // 监听属性变化，检查是否已收藏
-watch(() => props.property, (newProperty) => {
-  if (newProperty && authStore.isLoggedIn) {
-    // 这里可以调用API检查是否已收藏
-    // 暂时用简单的逻辑
+watch(() => props.property, async (newProperty) => {
+  if (newProperty) {
+    // 如果property对象中有isFavorited属性，直接使用
+    if ('isFavorited' in newProperty && typeof (newProperty as any).isFavorited === 'boolean') {
+      isFavorited.value = (newProperty as any).isFavorited
+    } else if (authStore.isLoggedIn && authStore.userId) {
+      // 否则通过API检查
+      // 注意：这个检查会在getPropertyDetail接口调用时完成，这里只是备用
     isFavorited.value = false
+    }
   }
-})
+}, { immediate: true })
 
 const closeModal = () => {
   emit('update:visible', false)

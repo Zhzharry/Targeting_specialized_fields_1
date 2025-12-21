@@ -23,6 +23,21 @@ public class HadoopConfig {
     @Value("${hadoop.data.dir:/tmp/hadoop-data}")
     private String hadoopDataDir;
 
+    @Value("${hadoop.yarn.resourcemanager.address:}")
+    private String yarnRMAddress;
+
+    @Value("${hadoop.yarn.resourcemanager.scheduler.address:}")
+    private String yarnSchedulerAddress;
+
+    @Value("${hadoop.mapreduce.jobhistory.address:}")
+    private String jobHistoryAddress;
+
+    @Value("${hadoop.mapreduce.application.classpath:}")
+    private String mapReduceAppClasspath;
+
+    @Value("${yarn.application.classpath:}")
+    private String yarnApplicationClasspath;
+
     /**
      * 创建Hadoop Configuration Bean
      */
@@ -35,9 +50,26 @@ public class HadoopConfig {
         conf.set("mapreduce.framework.name", mapReduceFramework);
         
         // 本地模式配置（开发环境）
-        if ("local".equals(mapReduceFramework)) {
+        if ("local".equalsIgnoreCase(mapReduceFramework)) {
             conf.set("mapreduce.jobtracker.address", "local");
             conf.set("fs.defaultFS", "file:///");
+        } else {
+            if (yarnRMAddress != null && !yarnRMAddress.isEmpty()) {
+                conf.set("yarn.resourcemanager.address", yarnRMAddress);
+            }
+            if (yarnSchedulerAddress != null && !yarnSchedulerAddress.isEmpty()) {
+                conf.set("yarn.resourcemanager.scheduler.address", yarnSchedulerAddress);
+            }
+            if (jobHistoryAddress != null && !jobHistoryAddress.isEmpty()) {
+                conf.set("mapreduce.jobhistory.address", jobHistoryAddress);
+            }
+            if (mapReduceAppClasspath != null && !mapReduceAppClasspath.isEmpty()) {
+                conf.set("mapreduce.application.classpath", mapReduceAppClasspath);
+            }
+            if (yarnApplicationClasspath != null && !yarnApplicationClasspath.isEmpty()) {
+                conf.set("yarn.application.classpath", yarnApplicationClasspath);
+            }
+            conf.set("mapreduce.app-submission.cross-platform", "true");
         }
         
         // 序列化配置

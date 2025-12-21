@@ -4,6 +4,7 @@ package com.example.controller;
 import com.example.service.PropertySimilarityService;
 import com.example.service.PropertySimilarityCFService;
 import com.example.service.UserSimilarityPropagationService;
+import com.example.service.UserSimilaritySparkService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,6 +36,9 @@ public class SimilarityController {
 
     @Autowired
     private UserSimilarityPropagationService userSimilarityService;
+
+    @Autowired
+    private UserSimilaritySparkService userSimilaritySparkService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -91,6 +95,41 @@ public class SimilarityController {
         } catch (Exception e) {
             result.put("success", false);
             result.put("message", "计算失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+
+    /**
+     * 计算指定ID范围内的房源相似度（只计算property_id < maxPropertyId的房源）
+     * POST /api/similarity/calculate/properties/range?maxPropertyId=10000
+     */
+    @PostMapping("/calculate/properties/range")
+    public ResponseEntity<Map<String, Object>> calculatePropertySimilarityByRange(
+            @RequestParam(required = true) Integer maxPropertyId) {
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            if (maxPropertyId == null || maxPropertyId <= 0) {
+                result.put("success", false);
+                result.put("message", "maxPropertyId必须大于0");
+                return ResponseEntity.badRequest().body(result);
+            }
+
+            long startTime = System.currentTimeMillis();
+            similarityService.calculatePropertySimilarityByRange(maxPropertyId);
+            long endTime = System.currentTimeMillis();
+
+            result.put("success", true);
+            result.put("message", "房源相似度计算完成（property_id < " + maxPropertyId + "）");
+            result.put("max_property_id", maxPropertyId);
+            result.put("duration_ms", endTime - startTime);
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "计算失败: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.internalServerError().body(result);
         }
     }
@@ -264,6 +303,64 @@ public class SimilarityController {
         } catch (Exception e) {
             result.put("success", false);
             result.put("message", "计算失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+
+    /**
+     * 使用Spark手动触发全量用户相似度计算
+     * POST /api/similarity/user/calculate/spark
+     */
+    @PostMapping("/user/calculate/spark")
+    public ResponseEntity<Map<String, Object>> calculateUserSimilarityWithSpark() {
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            long startTime = System.currentTimeMillis();
+            userSimilaritySparkService.calculateUserSimilarityFull();
+            long endTime = System.currentTimeMillis();
+
+            result.put("success", true);
+            result.put("message", "用户相似度计算完成（使用Spark，全量计算）");
+            result.put("duration_ms", endTime - startTime);
+            result.put("algorithm", "spark_full");
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "计算失败: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+    
+    /**
+     * 使用Spark手动触发增量用户相似度计算（只计算指定用户与其他用户的相似度）
+     * POST /api/similarity/user/{userId}/calculate/spark/incremental
+     */
+    @PostMapping("/user/{userId}/calculate/spark/incremental")
+    public ResponseEntity<Map<String, Object>> calculateUserSimilarityIncrementalWithSpark(
+            @PathVariable int userId) {
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            long startTime = System.currentTimeMillis();
+            userSimilaritySparkService.calculateUserSimilarityIncremental(userId);
+            long endTime = System.currentTimeMillis();
+
+            result.put("success", true);
+            result.put("message", "用户相似度增量计算完成（使用Spark，用户ID: " + userId + "）");
+            result.put("duration_ms", endTime - startTime);
+            result.put("algorithm", "spark_incremental");
+            result.put("user_id", userId);
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", "增量计算失败: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.internalServerError().body(result);
         }
     }
